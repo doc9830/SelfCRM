@@ -1,10 +1,8 @@
 import { useRef, useState, type ChangeEvent } from 'react'
 import { Button, Card, Field, Input } from '../components/ui'
-import { Icon } from '../components/Icons'
 import { downloadBackup, readBackupFile } from '../db/backup'
 import { parseAddresses, saveAddresses } from '../db/addresses'
 import { seedDemo } from '../db/seed'
-import { getLimits } from '../db/limits'
 import { useData } from '../state/DataContext'
 import { useTheme } from '../state/ThemeContext'
 import { emptyContractor, type Contractor } from '../types'
@@ -29,14 +27,10 @@ type UpdateState =
     }
 
 export function Settings() {
-  const { db, plan, refresh } = useData()
+  const { db, refresh } = useData()
   const { theme, toggleTheme } = useTheme()
   const fileRef = useRef<HTMLInputElement>(null)
   const addressFileRef = useRef<HTMLInputElement>(null)
-  const limits = getLimits(plan)
-
-  const clientsCount = db.getClients().length
-  const ordersCount = db.getOrders().length
   const [update, setUpdate] = useState<UpdateState>({ status: 'idle' })
 
   const checkUpdates = async () => {
@@ -89,11 +83,6 @@ export function Settings() {
     }
   }
 
-  const togglePlan = (full: boolean) => {
-    db.updateSettings({ plan: full ? 'FULL' : 'FREE' })
-    refresh()
-  }
-
   const handleImport = async (file: File | undefined) => {
     if (!file) return
     try {
@@ -142,50 +131,6 @@ export function Settings() {
 
       <Card className="settings-group">
         <div className="section-title" style={{ marginBottom: 6 }}>
-          Тариф
-        </div>
-        <div className="settings-row">
-          <div>
-            <div className="settings-row-title">
-              {plan === 'FULL' ? (
-                <span className="plan-badge plan-full">Полная версия</span>
-              ) : (
-                <span className="plan-badge plan-free">Бесплатная</span>
-              )}
-            </div>
-            <div className="settings-row-desc" style={{ marginTop: 6 }}>
-              {plan === 'FULL'
-                ? 'Без ограничений: клиенты, заказы, товары, склад, PDF, резервные копии.'
-                : 'До 20 клиентов и 50 заказов. Товары, склад, PDF и бэкапы — в полной версии.'}
-            </div>
-          </div>
-          <label className="switch">
-            <input
-              type="checkbox"
-              checked={plan === 'FULL'}
-              onChange={(e) => togglePlan(e.target.checked)}
-              aria-label="Полная версия"
-            />
-            <span className="switch-track" />
-          </label>
-        </div>
-
-        <div className="settings-row">
-          <span className="settings-row-desc">Клиенты</span>
-          <span style={{ fontWeight: 600 }}>
-            {clientsCount} / {Number.isFinite(limits.maxClients) ? limits.maxClients : '∞'}
-          </span>
-        </div>
-        <div className="settings-row">
-          <span className="settings-row-desc">Заказы</span>
-          <span style={{ fontWeight: 600 }}>
-            {ordersCount} / {Number.isFinite(limits.maxOrders) ? limits.maxOrders : '∞'}
-          </span>
-        </div>
-      </Card>
-
-      <Card className="settings-group">
-        <div className="section-title" style={{ marginBottom: 6 }}>
           Исполнитель
         </div>
         <div className="settings-row-desc" style={{ marginBottom: 12 }}>
@@ -205,9 +150,8 @@ export function Settings() {
           </div>
           <Button
             size="sm"
-            variant={limits.backup ? 'secondary' : 'ghost'}
+            variant="secondary"
             icon="download"
-            disabled={!limits.backup}
             onClick={() => downloadBackup(db)}
           >
             Скачать
@@ -220,22 +164,13 @@ export function Settings() {
           </div>
           <Button
             size="sm"
-            variant={limits.backup ? 'secondary' : 'ghost'}
+            variant="secondary"
             icon="upload"
-            disabled={!limits.backup}
             onClick={() => fileRef.current?.click()}
           >
             Загрузить
           </Button>
         </div>
-        {!limits.backup && (
-          <div className="limit-banner" style={{ marginBottom: 0, marginTop: 8 }}>
-            <span className="limit-banner-icon">
-              <Icon name="lock" size={18} />
-            </span>
-            <span className="limit-banner-text">Резервные копии доступны в полной версии.</span>
-          </div>
-        )}
       </Card>
 
       <Card className="settings-group">
@@ -260,7 +195,7 @@ export function Settings() {
           <div className="settings-row">
             <div>
               <div className="settings-row-title">Демо-данные</div>
-              <div className="settings-row-desc">Заполнить примером (включает полную версию)</div>
+              <div className="settings-row-desc">Заполнить демонстрационными данными</div>
             </div>
             <Button
               size="sm"

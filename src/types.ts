@@ -1,7 +1,5 @@
 export type OrderStatus = 'new' | 'in_progress' | 'done' | 'cancelled'
 
-export type Plan = 'FREE' | 'FULL'
-
 export interface Client {
   id: string
   name: string
@@ -56,7 +54,6 @@ export function emptyContractor(): Contractor {
 }
 
 export interface Settings {
-  plan: Plan
   contractor?: Contractor
 }
 

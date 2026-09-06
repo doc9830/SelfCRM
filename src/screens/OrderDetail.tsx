@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { Badge, Button, Card, EmptyState, Field, Input, Select, Textarea } from '../components/ui'
 import { Icon } from '../components/Icons'
 import { SuggestField, type SuggestOption } from '../components/SuggestField'
-import { getLimits } from '../db/limits'
 import { useRoute } from '../router'
 import { useData } from '../state/DataContext'
 import {
@@ -19,7 +18,7 @@ import { formatDate, money } from '../utils/format'
 import { statusTone } from '../utils/status'
 
 export function OrderDetail({ id, presetClientId }: { id: string; presetClientId?: string | null }) {
-  const { db, plan, refresh } = useData()
+  const { db, refresh } = useData()
   const { navigate } = useRoute()
   const isNew = id === 'new'
 
@@ -68,7 +67,6 @@ export function OrderDetail({ id, presetClientId }: { id: string; presetClientId
   const order = existing as Order
   const client = order.clientId ? db.getClient(order.clientId) : undefined
   const total = db.getOrderTotal(order)
-  const limits = getLimits(plan)
 
   const setStatus = (status: OrderStatus) => {
     db.saveOrder({ ...order, status })
@@ -138,7 +136,6 @@ export function OrderDetail({ id, presetClientId }: { id: string; presetClientId
             variant="primary"
             icon="doc"
             full
-            disabled={!limits.pdf}
             onClick={() => {
               setPdfBusy(true)
               setPdfError('')
@@ -161,11 +158,6 @@ export function OrderDetail({ id, presetClientId }: { id: string; presetClientId
           {pdfError && (
             <div className="field-error" style={{ marginTop: 6 }}>
               {pdfError}
-            </div>
-          )}
-          {!limits.pdf && (
-            <div className="field-hint" style={{ marginTop: 6 }}>
-              Генерация чека доступна в полной версии.
             </div>
           )}
         </div>
@@ -216,7 +208,7 @@ function OrderForm({
   onCancel: () => void
   onDelete?: () => void
 }) {
-  const { db, plan } = useData()
+  const { db } = useData()
   const [clientId, setClientId] = useState(initial.clientId ?? '')
   const [date, setDate] = useState(toDateInput(initial.date))
   const [status, setStatus] = useState<OrderStatus>(initial.status)
@@ -227,7 +219,7 @@ function OrderForm({
   const [error, setError] = useState('')
 
   const clients = db.getClients()
-  const canPickProduct = plan === 'FULL' && products.length > 0
+  const canPickProduct = products.length > 0
 
   const clientOptions: SuggestOption[] = clients.map((c) => ({
     id: c.id,

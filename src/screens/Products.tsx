@@ -1,27 +1,15 @@
 import { useState } from 'react'
 import { Badge, Button, EmptyState, Fab, Field, Input, Modal, Textarea } from '../components/ui'
 import { Icon } from '../components/Icons'
-import { useRoute } from '../router'
 import { useData } from '../state/DataContext'
 import type { Product } from '../types'
 import { money, plural } from '../utils/format'
 import { uid } from '../utils/id'
 
 export function Products() {
-  const { db, plan, refresh } = useData()
-  const { navigate } = useRoute()
+  const { db, refresh } = useData()
   const [query, setQuery] = useState('')
   const [editing, setEditing] = useState<Product | 'new' | null>(null)
-
-  if (plan === 'FREE') {
-    return (
-      <LockedScreen
-        title="Товары — в полной версии"
-        description="Ведите каталог товаров с ценами и остатками. Откройте полную версию, чтобы использовать товары и склад."
-        onUnlock={() => navigate('/settings')}
-      />
-    )
-  }
 
   const products = db.getProducts()
   const filtered = products.filter((p) => {
@@ -88,29 +76,6 @@ export function Products() {
         />
       )}
     </div>
-  )
-}
-
-export function LockedScreen({
-  title,
-  description,
-  onUnlock,
-}: {
-  title: string
-  description: string
-  onUnlock: () => void
-}) {
-  return (
-    <EmptyState
-      icon="lock"
-      title={title}
-      description={description}
-      action={
-        <Button variant="primary" onClick={onUnlock}>
-          Открыть полную версию
-        </Button>
-      }
-    />
   )
 }
 

@@ -20,7 +20,7 @@ function emptySnapshot(): DatabaseSnapshot {
     clients: [],
     products: [],
     orders: [],
-    settings: { plan: 'FREE', contractor: emptyContractor() },
+    settings: { contractor: emptyContractor() },
   }
 }
 
@@ -46,7 +46,7 @@ export class Database {
         clients: Array.isArray(parsed.clients) ? parsed.clients : [],
         products: Array.isArray(parsed.products) ? parsed.products : [],
         orders: Array.isArray(parsed.orders) ? parsed.orders : [],
-        settings: parsed.settings ?? { plan: 'FREE' },
+        settings: parsed.settings ?? { contractor: emptyContractor() },
       }
     } catch {
       return emptySnapshot()
@@ -239,7 +239,7 @@ export class Database {
       clients: parsed.clients ?? [],
       products: parsed.products ?? [],
       orders: parsed.orders ?? [],
-      settings: parsed.settings ?? { plan: 'FREE' },
+      settings: parsed.settings ?? { contractor: emptyContractor() },
     }
     this.persist()
   }

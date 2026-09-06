@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import type { Client, Order, Product } from '../types'
 import { Database } from './database'
 import { MemoryStore } from './kvstore'
-import { checkClientLimit, checkOrderLimit } from './limits'
 
 function setup() {
   const store = new MemoryStore()
@@ -130,19 +129,5 @@ describe('Database: резервные копии', () => {
     second.importData(json)
     expect(second.getClients()).toHaveLength(1)
     expect(second.getClient('c1')?.name).toBe('Иван')
-  })
-})
-
-describe('Лимиты бесплатной версии', () => {
-  it('ограничивает клиентов', () => {
-    expect(checkClientLimit('FREE', 19).ok).toBe(true)
-    expect(checkClientLimit('FREE', 20).ok).toBe(false)
-    expect(checkClientLimit('FULL', 1000).ok).toBe(true)
-  })
-
-  it('ограничивает заказы', () => {
-    expect(checkOrderLimit('FREE', 50).ok).toBe(false)
-    expect(checkOrderLimit('FREE', 49).ok).toBe(true)
-    expect(checkOrderLimit('FULL', 5000).ok).toBe(true)
   })
 })

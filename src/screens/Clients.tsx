@@ -1,18 +1,16 @@
 import { useState } from 'react'
-import { Badge, Button, EmptyState, Fab, LimitBanner } from '../components/ui'
+import { Badge, Button, EmptyState, Fab } from '../components/ui'
 import { Icon } from '../components/Icons'
-import { checkClientLimit } from '../db/limits'
 import { useRoute } from '../router'
 import { useData } from '../state/DataContext'
 import { plural } from '../utils/format'
 
 export function Clients() {
-  const { db, plan } = useData()
+  const { db } = useData()
   const { navigate } = useRoute()
   const [query, setQuery] = useState('')
 
   const clients = db.getClients()
-  const limitCheck = checkClientLimit(plan, clients.length)
 
   const filtered = clients.filter((c) => {
     const q = query.trim().toLowerCase()
@@ -26,17 +24,6 @@ export function Clients() {
 
   return (
     <div>
-      {!limitCheck.ok && (
-        <LimitBanner
-          text={limitCheck.reason ?? ''}
-          action={
-            <Button size="sm" variant="secondary" onClick={() => navigate('/settings')}>
-              Открыть
-            </Button>
-          }
-        />
-      )}
-
       <div className="toolbar">
         <div className="search">
           <Icon name="search" size={18} />
@@ -85,7 +72,7 @@ export function Clients() {
         </div>
       )}
 
-      {limitCheck.ok && <Fab onClick={() => navigate('/clients/new')} label="Добавить клиента" />}
+      <Fab onClick={() => navigate('/clients/new')} label="Добавить клиента" />
     </div>
   )
 }

@@ -1,6 +1,5 @@
 import { useState } from 'react'
-import { Badge, Button, EmptyState, Fab, LimitBanner } from '../components/ui'
-import { checkOrderLimit } from '../db/limits'
+import { Badge, Button, EmptyState, Fab } from '../components/ui'
 import { useRoute } from '../router'
 import { useData } from '../state/DataContext'
 import { ORDER_STATUS_LABEL, type OrderStatus } from '../types'
@@ -19,28 +18,15 @@ const FILTERS: Array<{ value: Filter; label: string }> = [
 ]
 
 export function Orders() {
-  const { db, plan } = useData()
+  const { db } = useData()
   const { navigate } = useRoute()
   const [filter, setFilter] = useState<Filter>('all')
 
   const orders = db.getOrders()
-  const limitCheck = checkOrderLimit(plan, orders.length)
-
   const filtered = filter === 'all' ? orders : orders.filter((o) => o.status === filter)
 
   return (
     <div>
-      {!limitCheck.ok && (
-        <LimitBanner
-          text={limitCheck.reason ?? ''}
-          action={
-            <Button size="sm" variant="secondary" onClick={() => navigate('/settings')}>
-              Открыть
-            </Button>
-          }
-        />
-      )}
-
       <div className="chips">
         {FILTERS.map((f) => (
           <button
@@ -59,11 +45,9 @@ export function Orders() {
           title="Заказов нет"
           description="Создайте первый заказ"
           action={
-            limitCheck.ok ? (
-              <Button icon="plus" onClick={() => navigate('/orders/new')}>
-                Создать заказ
-              </Button>
-            ) : undefined
+            <Button icon="plus" onClick={() => navigate('/orders/new')}>
+              Создать заказ
+            </Button>
           }
         />
       ) : (
@@ -89,7 +73,7 @@ export function Orders() {
         </div>
       )}
 
-      {limitCheck.ok && <Fab onClick={() => navigate('/orders/new')} label="Создать заказ" />}
+      <Fab onClick={() => navigate('/orders/new')} label="Создать заказ" />
     </div>
   )
 }

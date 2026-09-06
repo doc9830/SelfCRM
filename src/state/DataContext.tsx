@@ -8,11 +8,9 @@ import {
   type ReactNode,
 } from 'react'
 import { Database } from '../db/database'
-import type { Plan } from '../types'
 
 interface DataContextValue {
   db: Database
-  plan: Plan
   version: number
   refresh: () => void
 }
@@ -26,11 +24,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [version, setVersion] = useState(0)
   const refresh = useCallback(() => setVersion((v) => v + 1), [])
 
-  const plan = dbRef.current.getSettings().plan
-
   const value = useMemo<DataContextValue>(
-    () => ({ db: dbRef.current as Database, plan, version, refresh }),
-    [plan, version, refresh],
+    () => ({ db: dbRef.current as Database, version, refresh }),
+    [version, refresh],
   )
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>

@@ -1,4 +1,3 @@
-import { getLimits } from '../db/limits'
 import { useRoute } from '../router'
 import { useData } from '../state/DataContext'
 import { isActiveStatus } from '../types'
@@ -6,13 +5,12 @@ import { money, plural } from '../utils/format'
 import { Icon, type IconName } from '../components/Icons'
 
 export function Dashboard() {
-  const { db, plan } = useData()
+  const { db } = useData()
   const { navigate } = useRoute()
 
   const clients = db.getClients()
   const orders = db.getOrders()
   const products = db.getProducts()
-  const limits = getLimits(plan)
 
   const activeOrders = orders.filter((o) => isActiveStatus(o.status))
   const doneOrders = orders.filter((o) => o.status === 'done')
@@ -20,10 +18,6 @@ export function Dashboard() {
     .filter((o) => o.status !== 'cancelled')
     .reduce((sum, o) => sum + db.getOrderTotal(o), 0)
   const lowStock = products.filter((p) => p.stock <= p.minStock)
-
-  const clientsLeft = Number.isFinite(limits.maxClients)
-    ? Math.max(0, limits.maxClients - clients.length)
-    : null
 
   return (
     <div>
@@ -33,17 +27,6 @@ export function Dashboard() {
         <Stat value={String(doneOrders.length)} label="Завершённые" />
         <Stat value={money(revenue)} label="Выручка" accent />
       </div>
-
-      {clientsLeft !== null && clientsLeft <= 5 && (
-        <div className="limit-banner" style={{ marginTop: 14 }}>
-          <span className="limit-banner-icon">
-            <Icon name="lock" size={18} />
-          </span>
-          <span className="limit-banner-text">
-            Осталось мест для клиентов: {clientsLeft} из {limits.maxClients} (бесплатная версия).
-          </span>
-        </div>
-      )}
 
       <div className="section">
         <div className="section-title" style={{ marginBottom: 10 }}>
@@ -57,7 +40,7 @@ export function Dashboard() {
         </div>
       </div>
 
-      {limits.warehouse && lowStock.length > 0 && (
+      {lowStock.length > 0 && (
         <div className="section">
           <div className="section-head">
             <div className="section-title">Низкие остатки</div>

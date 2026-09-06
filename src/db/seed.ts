@@ -91,6 +91,4 @@ export function seedDemo(db: Database): void {
   for (const c of [c1, c2, c3, c4, c5]) db.saveClient(c)
   for (const p of [p1, p2, p3, p4, p5, p6]) db.saveProduct(p)
   for (const o of orders) db.saveOrder(o)
-
-  db.updateSettings({ plan: 'FULL' })
 }

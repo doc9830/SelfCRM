@@ -153,17 +153,3 @@ export function Fab({ onClick, label }: { onClick: () => void; label?: string })
     </button>
   )
 }
-
-// ----- Подсказка про лимит -----
-
-export function LimitBanner({ text, action }: { text: string; action?: ReactNode }) {
-  return (
-    <div className="limit-banner">
-      <div className="limit-banner-icon">
-        <Icon name="lock" size={18} />
-      </div>
-      <div className="limit-banner-text">{text}</div>
-      {action}
-    </div>
-  )
-}

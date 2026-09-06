@@ -6,22 +6,11 @@ import { useData } from '../state/DataContext'
 import type { Product } from '../types'
 import { plural } from '../utils/format'
 import { cx } from '../components/ui'
-import { LockedScreen } from './Products'
 
 export function Stock() {
-  const { db, plan, refresh } = useData()
+  const { db, refresh } = useData()
   const { navigate } = useRoute()
   const [adjusting, setAdjusting] = useState<Product | null>(null)
-
-  if (plan === 'FREE') {
-    return (
-      <LockedScreen
-        title="Склад — в полной версии"
-        description="Отслеживайте остатки товаров и получайте предупреждения о низких остатках."
-        onUnlock={() => navigate('/settings')}
-      />
-    )
-  }
 
   const products = db.getProducts()
   const low = products.filter((p) => p.stock <= p.minStock)
