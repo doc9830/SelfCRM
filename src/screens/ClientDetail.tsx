@@ -94,22 +94,17 @@ export function ClientDetail({ id }: { id: string }) {
             variant="outline"
             icon="navigation"
             full
-            disabled={client.latitude == null || client.longitude == null}
             onClick={() =>
               openRoute({
                 lat: client.latitude ?? 0,
                 lng: client.longitude ?? 0,
                 label: client.name,
+                address: client.address,
               })
             }
           >
             Маршрут
           </Button>
-          {client.latitude == null && (
-            <div className="field-hint" style={{ marginTop: 6 }}>
-              Координаты не указаны — выберите адрес из базы, чтобы построить маршрут.
-            </div>
-          )}
         </div>
       )}
 

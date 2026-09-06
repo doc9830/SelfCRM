@@ -6,6 +6,9 @@ export interface RoutePoint {
   lat: number
   lng: number
   label?: string
+  // Полный текстовый адрес (с домом). Если он есть, маршрут строится по нему —
+  // навигатор сам уточнит точку по своей базе, а не по «центру населённого пункта».
+  address?: string
 }
 
 function isNativeAndroid(): boolean {
@@ -21,22 +24,36 @@ function isNativeAndroid(): boolean {
 }
 
 // geo:-URI. При открытии на Android система сама предложит выбор приложения
-// (Google Maps, Яндекс.Карты, 2ГИС и т.д.).
+// (Google Maps, Яндекс.Карты, 2ГИС и т.д.). Если задан текстовый адрес, передаём
+// его как поисковый запрос `q` — навигатор сам найдёт нужный дом по своей базе.
+// Иначе передаём координаты.
 export function buildRouteUri(dest: RoutePoint): string {
+  const address = (dest.address ?? '').trim()
+  if (address) {
+    return `geo:0,0?q=${encodeURIComponent(address)}`
+  }
   const q = `${dest.lat},${dest.lng}${dest.label ? `(${encodeURIComponent(dest.label)})` : ''}`
   return `geo:0,0?q=${q}`
 }
 
 export function openRoute(dest: RoutePoint): void {
-  if (!dest || !Number.isFinite(dest.lat) || !Number.isFinite(dest.lng)) return
+  if (!dest) return
+  const hasCoords = Number.isFinite(dest.lat) && Number.isFinite(dest.lng)
+  const address = (dest.address ?? '').trim()
+  if (!hasCoords && !address) return
+
   if (isNativeAndroid()) {
     // `_system` заставляет Capacitor передать ссылку операционной системе,
     // которая показывает выбор приложения для навигации.
     window.open(buildRouteUri(dest), '_system')
-  } else {
-    const url = `https://yandex.ru/maps/?rtext=~${dest.lat},${dest.lng}&rtt=auto`
-    window.open(url, '_blank', 'noopener')
+    return
   }
+
+  // В браузере (dev-режим) — маршрут в Яндекс.Картах. Адрес передаём как текст,
+  // координаты — как есть (их кодировать не нужно).
+  const target = address ? encodeURIComponent(address) : `${dest.lat},${dest.lng}`
+  const url = `https://yandex.ru/maps/?rtext=~${target}&rtt=auto`
+  window.open(url, '_blank', 'noopener')
 }
 
 // tel:-URI для звонка клиенту. Убираем из номера всё, кроме цифр и ведущего «+»,

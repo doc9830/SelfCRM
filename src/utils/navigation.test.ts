@@ -11,6 +11,26 @@ describe('buildRouteUri', () => {
       'geo:0,0?q=55.76,37.61(Home)',
     )
   })
+
+  it('передаёт текстовый адрес как поисковый запрос', () => {
+    const address = 'г. Москва, ул. Тверская, д. 1'
+    expect(buildRouteUri({ lat: 0, lng: 0, address })).toBe(
+      `geo:0,0?q=${encodeURIComponent(address)}`,
+    )
+  })
+
+  it('предпочитает текстовый адрес координатам', () => {
+    const address = 'г. Москва, ул. Арбат, д. 12'
+    expect(buildRouteUri({ lat: 55.76, lng: 37.61, address })).toBe(
+      `geo:0,0?q=${encodeURIComponent(address)}`,
+    )
+  })
+
+  it('игнорирует пустой адрес и использует координаты', () => {
+    expect(buildRouteUri({ lat: 55.76, lng: 37.61, address: '   ' })).toBe(
+      'geo:0,0?q=55.76,37.61',
+    )
+  })
 })
 
 describe('buildTelUri', () => {
