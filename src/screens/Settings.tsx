@@ -8,7 +8,8 @@ import { getLimits } from '../db/limits'
 import { useData } from '../state/DataContext'
 import { useTheme } from '../state/ThemeContext'
 import { emptyContractor, type Contractor } from '../types'
-import { fetchLatestRelease, isNewerVersion, openExternal, type ReleaseInfo } from '../updates'
+import { Capacitor } from '@capacitor/core'
+import { downloadUpdate, fetchLatestRelease, installUpdate, isNewerVersion, openExternal, type ReleaseInfo } from '../updates'
 import { APP_VERSION } from '../version'
 
 const isDev = import.meta.env.DEV
@@ -18,7 +19,14 @@ type UpdateState =
   | { status: 'checking' }
   | { status: 'error'; message: string }
   | { status: 'up-to-date' }
-  | { status: 'available'; release: ReleaseInfo }
+  | {
+      status: 'available'
+      release: ReleaseInfo
+      busy: boolean
+      downloaded: boolean
+      progress: number
+      error?: string
+    }
 
 export function Settings() {
   const { db, plan, refresh } = useData()
@@ -40,7 +48,7 @@ export function Settings() {
         return
       }
       if (isNewerVersion(release.version, APP_VERSION)) {
-        setUpdate({ status: 'available', release })
+        setUpdate({ status: 'available', release, busy: false, downloaded: false, progress: 0 })
       } else {
         setUpdate({ status: 'up-to-date' })
       }
@@ -49,6 +57,35 @@ export function Settings() {
         status: 'error',
         message: e instanceof Error ? e.message : 'Не удалось проверить обновления',
       })
+    }
+  }
+
+  const startUpdate = async (release: ReleaseInfo) => {
+    const apkUrl = release.apkUrl
+    if (!apkUrl || !Capacitor.isNativePlatform()) {
+      await openExternal(apkUrl ?? release.url)
+      return
+    }
+
+    const alreadyDownloaded = update.status === 'available' && update.downloaded
+    setUpdate((prev) =>
+      prev.status === 'available'
+        ? { ...prev, busy: true, error: undefined }
+        : { status: 'available', release, busy: true, downloaded: false, progress: 0, error: undefined },
+    )
+
+    try {
+      if (!alreadyDownloaded) {
+        await downloadUpdate(apkUrl, ({ fraction }) => {
+          setUpdate((prev) => (prev.status === 'available' ? { ...prev, progress: fraction } : prev))
+        })
+        setUpdate((prev) => (prev.status === 'available' ? { ...prev, downloaded: true, progress: 1 } : prev))
+      }
+      await installUpdate()
+      setUpdate((prev) => (prev.status === 'available' ? { ...prev, busy: false, error: undefined } : prev))
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Не удалось установить обновление'
+      setUpdate((prev) => (prev.status === 'available' ? { ...prev, busy: false, error: message } : prev))
     }
   }
 
@@ -308,10 +345,27 @@ export function Settings() {
               size="sm"
               variant="primary"
               icon="download"
-              onClick={() => void openExternal(update.release.apkUrl ?? update.release.url)}
+              disabled={update.busy}
+              onClick={() => void startUpdate(update.release)}
             >
-              Скачать обновление
+              {update.busy
+                ? update.downloaded
+                  ? 'Запуск…'
+                  : `Скачивание… ${Math.round(update.progress * 100)}%`
+                : update.downloaded
+                  ? 'Установить'
+                  : 'Скачать и установить'}
             </Button>
+            {update.error && (
+              <div className="limit-banner" style={{ marginTop: 8, marginBottom: 0 }}>
+                <span className="limit-banner-text">{update.error}</span>
+              </div>
+            )}
+            {update.downloaded && !update.busy && !update.error && (
+              <div className="field-hint" style={{ marginTop: 8 }}>
+                Файл скачан. Если установка не запустилась, нажмите «Установить».
+              </div>
+            )}
           </div>
         )}
       </Card>

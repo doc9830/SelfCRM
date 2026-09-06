@@ -1,4 +1,4 @@
-import { Capacitor } from '@capacitor/core'
+import { Capacitor, registerPlugin, type PluginListenerHandle } from '@capacitor/core'
 import { Browser } from '@capacitor/browser'
 import { GITHUB_REPO } from './version'
 
@@ -89,4 +89,44 @@ export async function openExternal(url: string): Promise<void> {
   } else {
     window.open(url, '_blank', 'noopener,noreferrer')
   }
+}
+
+// Нативный плагин Android: скачивает APK во временный каталог и запускает
+// системный установщик. Скачивание делается нативно, потому что у ассетов
+// GitHub нет CORS-заголовков и fetch из WebView не сработает.
+export const UPDATE_FILE_NAME = 'selfcrm-update.apk'
+
+export interface UpdateProgress {
+  received: number
+  total: number
+  fraction: number
+}
+
+interface AppInstallerPlugin {
+  download(options: { url: string; fileName: string }): Promise<{ path: string; size: number }>
+  install(options: { fileName: string }): Promise<{ value: boolean }>
+  addListener(eventName: 'progress', listenerFunc: (info: UpdateProgress) => void): Promise<PluginListenerHandle>
+  removeAllListeners(): Promise<void>
+}
+
+const AppInstaller = registerPlugin<AppInstallerPlugin>('AppInstaller')
+
+// Скачивает APK во временный каталог приложения. Работает только на Android.
+export async function downloadUpdate(
+  apkUrl: string,
+  onProgress?: (progress: UpdateProgress) => void,
+): Promise<void> {
+  const listener = onProgress
+    ? await AppInstaller.addListener('progress', (info) => onProgress(info))
+    : null
+  try {
+    await AppInstaller.download({ url: apkUrl, fileName: UPDATE_FILE_NAME })
+  } finally {
+    if (listener) await listener.remove()
+  }
+}
+
+// Открывает уже скачанный APK в системном установщике Android.
+export async function installUpdate(): Promise<void> {
+  await AppInstaller.install({ fileName: UPDATE_FILE_NAME })
 }
