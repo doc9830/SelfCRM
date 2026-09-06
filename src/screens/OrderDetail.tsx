@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Badge, Button, Card, EmptyState, Field, Input, Select, Textarea } from '../components/ui'
 import { Icon } from '../components/Icons'
+import { SuggestField, type SuggestOption } from '../components/SuggestField'
 import { getLimits } from '../db/limits'
 import { useRoute } from '../router'
 import { useData } from '../state/DataContext'
@@ -24,6 +25,8 @@ export function OrderDetail({ id, presetClientId }: { id: string; presetClientId
 
   const existing = isNew ? undefined : db.getOrder(id)
   const [editing, setEditing] = useState(isNew)
+  const [pdfBusy, setPdfBusy] = useState(false)
+  const [pdfError, setPdfError] = useState('')
 
   if (!isNew && !existing) {
     return (
@@ -137,6 +140,8 @@ export function OrderDetail({ id, presetClientId }: { id: string; presetClientId
             full
             disabled={!limits.pdf}
             onClick={() => {
+              setPdfBusy(true)
+              setPdfError('')
               void import('../pdf/documents')
                 .then(({ generateReceiptPdf }) =>
                   generateReceiptPdf({
@@ -146,12 +151,18 @@ export function OrderDetail({ id, presetClientId }: { id: string; presetClientId
                   }),
                 )
                 .catch((e) => {
-                  window.alert(e instanceof Error ? e.message : 'Не удалось сформировать чек')
+                  setPdfError(e instanceof Error ? e.message : 'Не удалось сформировать чек')
                 })
+                .finally(() => setPdfBusy(false))
             }}
           >
-            Чек (PDF)
+            {pdfBusy ? 'Формирование…' : 'Чек (PDF)'}
           </Button>
+          {pdfError && (
+            <div className="field-error" style={{ marginTop: 6 }}>
+              {pdfError}
+            </div>
+          )}
           {!limits.pdf && (
             <div className="field-hint" style={{ marginTop: 6 }}>
               Генерация чека доступна в полной версии.
@@ -218,6 +229,22 @@ function OrderForm({
   const clients = db.getClients()
   const canPickProduct = plan === 'FULL' && products.length > 0
 
+  const clientOptions: SuggestOption[] = clients.map((c) => ({
+    id: c.id,
+    label: c.name,
+    sub: c.phone || undefined,
+  }))
+  const selectedClient = clients.find((c) => c.id === clientId)
+  const selectedClientOption: SuggestOption | null = selectedClient
+    ? { id: selectedClient.id, label: selectedClient.name, sub: selectedClient.phone || undefined }
+    : null
+
+  const productOptions: SuggestOption[] = products.map((p) => ({
+    id: p.id,
+    label: p.name,
+    sub: [p.sku, money(p.price)].filter(Boolean).join(' · '),
+  }))
+
   const patchItem = (index: number, patch: Partial<OrderItem>) => {
     setItems((prev) => prev.map((it, i) => (i === index ? { ...it, ...patch } : it)))
     if (error) setError('')
@@ -262,14 +289,15 @@ function OrderForm({
   return (
     <div className="form">
       <Field label="Клиент">
-        <Select value={clientId} onChange={(e) => setClientId(e.target.value)}>
-          <option value="">Без клиента</option>
-          {clients.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </Select>
+        <SuggestField
+          selected={selectedClientOption}
+          options={clientOptions}
+          placeholder="Начните вводить имя или телефон…"
+          icon="users"
+          emptyLabel="Без клиента"
+          revertOnBlur
+          onSelect={(option) => setClientId(option ? option.id : '')}
+        />
       </Field>
 
       <Field label="Дата">
@@ -320,26 +348,28 @@ function OrderForm({
 
                 {canPickProduct && (
                   <div style={{ marginBottom: 8 }}>
-                    <Select
-                      value={item.productId ?? ''}
-                      onChange={(e) => {
-                        const productId = e.target.value
-                        const product = products.find((p) => p.id === productId)
-                        patchItem(
-                          i,
-                          product
-                            ? { productId, name: product.name, price: product.price }
-                            : { productId: null },
-                        )
+                    <SuggestField
+                      selected={
+                        item.productId
+                          ? (productOptions.find((o) => o.id === item.productId) ?? null)
+                          : null
+                      }
+                      options={productOptions}
+                      placeholder="Поиск товара…"
+                      icon="box"
+                      emptyLabel="Позиция вручную"
+                      revertOnBlur
+                      onSelect={(option) => {
+                        if (!option) {
+                          patchItem(i, { productId: null })
+                          return
+                        }
+                        const product = products.find((p) => p.id === option.id)
+                        if (product) {
+                          patchItem(i, { productId: product.id, name: product.name, price: product.price })
+                        }
                       }}
-                    >
-                      <option value="">Позиция вручную</option>
-                      {products.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name} — {money(p.price)}
-                        </option>
-                      ))}
-                    </Select>
+                    />
                   </div>
                 )}
 

@@ -1,15 +1,18 @@
-// Декларации типов для pdfmake (у пакета нет собственных типов для сборок build/).
+// Декларации типов для pdfmake 0.3.x (у пакета нет собственных типов для сборок build/).
 declare module 'pdfmake/build/pdfmake' {
-  interface PdfMakeStatic {
-    vfs: Record<string, string>
-    addVirtualFileSystem(fonts: Record<string, string>): void
-    createPdf(def: unknown): {
-      download(filename?: string, callback?: () => void): void
-      open(options?: unknown): void
-      getBlob(cb: (blob: Blob) => void): void
-      getBase64(cb: (base64: string) => void): void
-    }
+  interface PdfDocument {
+    download(filename?: string): Promise<void>
+    open(win?: Window | null): Promise<void>
+    getBlob(): Promise<Blob>
+    getBase64(): Promise<string>
+    getDataUrl(): Promise<string>
   }
+
+  interface PdfMakeStatic {
+    addVirtualFileSystem(fonts: Record<string, string>): void
+    createPdf(def: unknown): PdfDocument
+  }
+
   const pdfMake: PdfMakeStatic
   export default pdfMake
 }

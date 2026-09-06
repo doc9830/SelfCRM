@@ -1009,6 +1009,100 @@ button {
   color: var(--text-muted);
 }
 
+/* ---- Автодополнение (клиент/товар) ---- */
+
+.suggest-field {
+  position: relative;
+}
+
+.suggest-field-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text-muted);
+}
+
+.suggest-field-input:focus-within {
+  border-color: var(--primary);
+}
+
+.suggest-field-control {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 0;
+  border: none;
+  background: transparent;
+  font-size: 15px;
+  color: var(--text);
+  outline: none;
+}
+
+.suggest-field-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.suggest-field-clear:active {
+  background: var(--bg);
+}
+
+.suggest-list {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 30;
+  max-height: 260px;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(16, 24, 40, 0.14);
+}
+
+.suggest-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  background: transparent;
+  text-align: left;
+}
+
+.suggest-item:active {
+  background: var(--primary-soft);
+}
+
+.suggest-item-main {
+  font-size: 14px;
+  color: var(--text);
+}
+
+.suggest-item-sub {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.suggest-status {
+  padding: 10px 12px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
 /* ---- Тёмная тема ---- */
 
 :root[data-theme='dark'] {

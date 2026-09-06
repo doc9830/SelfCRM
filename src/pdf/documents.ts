@@ -9,13 +9,12 @@ import { Directory, Filesystem } from '@capacitor/filesystem'
 import { Share } from '@capacitor/share'
 import { formatDate } from '../utils/format'
 
-;(pdfMake as { vfs?: Record<string, string> }).vfs = vfs
+// В pdfmake 0.3.x шрифт Roboto (с кириллицей) подключается через виртуальную ФС.
+pdfMake.addVirtualFileSystem(vfs)
 
-// Превращает PDF в base64-строку (нужно, чтобы записать файл на устройство).
-function getPdfBase64(docDefinition: unknown): Promise<string> {
-  return new Promise((resolve) => {
-    pdfMake.createPdf(docDefinition).getBase64((data) => resolve(data))
-  })
+// Возвращает готовый data-URL документа (нужно, чтобы записать файл на устройство).
+async function getPdfDataUrl(docDefinition: unknown): Promise<string> {
+  return pdfMake.createPdf(docDefinition).getDataUrl()
 }
 
 // Сумма без знака валюты (символ «₽» может отсутствовать во встроенном шрифте),
@@ -135,10 +134,10 @@ export async function generateReceiptPdf(input: ReceiptInput): Promise<void> {
   if (Capacitor.isNativePlatform()) {
     // В Android-WebView скачивание через браузер не срабатывает, поэтому пишем PDF
     // во временный каталог устройства и открываем системное меню «Поделиться».
-    const base64 = await getPdfBase64(docDefinition)
+    const dataUrl = await getPdfDataUrl(docDefinition)
     const file = await Filesystem.writeFile({
       path: filename,
-      data: `data:application/pdf;base64,${base64}`,
+      data: dataUrl,
       directory: Directory.Cache,
       recursive: true,
     })
@@ -150,6 +149,6 @@ export async function generateReceiptPdf(input: ReceiptInput): Promise<void> {
     return
   }
 
-  pdfMake.createPdf(docDefinition).download(filename)
+  await pdfMake.createPdf(docDefinition).download(filename)
 }
 
