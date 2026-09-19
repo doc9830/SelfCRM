@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Badge, Button, Card, EmptyState, Field, Input, Select, Textarea } from '../components/ui'
 import { Icon } from '../components/Icons'
 import { SuggestField, type SuggestOption } from '../components/SuggestField'
@@ -218,6 +218,8 @@ function OrderForm({
     initial.items.length ? initial.items.map((it) => ({ ...it })) : [db.createEmptyItem()],
   )
   const [error, setError] = useState('')
+  // Кнопка «Добавить позицию» стоит под списком — здесь подкручиваем к новому полю.
+  const itemsRef = useRef<HTMLDivElement>(null)
 
   const clients = db.getClients()
   const canPickProduct = products.length > 0
@@ -243,7 +245,14 @@ function OrderForm({
     if (error) setError('')
   }
 
-  const addItem = () => setItems((prev) => [...prev, db.createEmptyItem()])
+  const addItem = () => {
+    setItems((prev) => [...prev, db.createEmptyItem()])
+    // Новое поле появляется над кнопкой: если оно не поместилось — подкручиваем к нему.
+    window.setTimeout(() => {
+      const cards = itemsRef.current?.querySelectorAll('.item-card')
+      cards?.[cards.length - 1]?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+    }, 60)
+  }
 
   const removeItem = (index: number) => setItems((prev) => prev.filter((_, i) => i !== index))
 
@@ -308,11 +317,8 @@ function OrderForm({
       </Field>
 
       <div>
-        <div className="section-head">
-          <div className="section-title">Позиции</div>
-          <Button size="sm" variant="secondary" icon="plus" onClick={addItem}>
-            Добавить
-          </Button>
+        <div className="section-title" style={{ marginBottom: 10 }}>
+          Позиции
         </div>
 
         {error && (
@@ -321,7 +327,7 @@ function OrderForm({
           </div>
         )}
 
-        <div className="items-editor">
+        <div className="items-editor" ref={itemsRef}>
           {items.map((item, i) => {
             const lineSum = item.price * item.qty
             return (
@@ -402,6 +408,10 @@ function OrderForm({
             )
           })}
         </div>
+
+        <Button className="items-add" variant="secondary" icon="plus" full onClick={addItem}>
+          Добавить позицию
+        </Button>
       </div>
 
       <div className="total-row">

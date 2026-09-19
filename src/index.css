@@ -816,6 +816,15 @@ button {
   gap: 10px;
 }
 
+/* Кнопка добавления позиции: всегда под списком, пунктирная «ячейка» в ритме карточек. */
+.items-add {
+  margin-top: 10px;
+  border-style: dashed;
+  border-color: var(--primary-strong);
+  background: transparent;
+  color: var(--primary-strong);
+}
+
 .item-card {
   border: 1px solid var(--border);
   border-radius: var(--radius);
