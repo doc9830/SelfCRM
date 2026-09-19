@@ -694,6 +694,7 @@ button {
 }
 
 .stat {
+  position: relative;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -701,13 +702,37 @@ button {
   padding: 14px;
 }
 
+/* Плашка-кнопка: на главном экране по нажатию открывается список или раздел. */
+.stat-btn {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.stat-btn:active {
+  transform: scale(0.98);
+}
+
+.stat-arrow {
+  position: absolute;
+  top: 12px;
+  right: 10px;
+  display: flex;
+  color: var(--text-muted);
+}
+
 .stat-value {
+  display: block;
   font-size: 22px;
   font-weight: 800;
   letter-spacing: -0.01em;
 }
 
 .stat-label {
+  display: block;
   font-size: 12.5px;
   color: var(--text-muted);
   margin-top: 2px;

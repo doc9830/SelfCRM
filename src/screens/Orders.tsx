@@ -1,22 +1,23 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Badge, Button, EmptyState, Fab } from '../components/ui'
 import { useRoute } from '../router'
 import { useData } from '../state/DataContext'
 import { useSortValue } from '../state/SortContext'
 import { ORDER_STATUS_LABEL, type OrderStatus } from '../types'
 import { formatDate, money, plural } from '../utils/format'
+import {
+  ORDER_FILTERS,
+  ORDER_FILTER_LABEL,
+  matchesOrderFilter,
+  orderFilterFromQuery,
+  type OrderFilter,
+} from '../utils/links'
 import { statusTone } from '../utils/status'
 import { cx } from '../components/ui'
 
-type Filter = 'all' | OrderStatus
-
-const FILTERS: Array<{ value: Filter; label: string }> = [
-  { value: 'all', label: 'Все' },
-  { value: 'new', label: 'Новые' },
-  { value: 'in_progress', label: 'В работе' },
-  { value: 'done', label: 'Завершённые' },
-  { value: 'cancelled', label: 'Отменённые' },
-]
+// Чипы фильтра заданы в utils/links.ts: «Активные» — это «Новые» + «В работе»,
+// на этот же фильтр ведёт плашка «Активные заказы» с главного экрана.
+const FILTERS = ORDER_FILTERS.map((value) => ({ value, label: ORDER_FILTER_LABEL[value] }))
 
 // Варианты сортировки заданы в state/SortContext.tsx — их показывает значок в шапке.
 type Sort = 'date-desc' | 'date-asc' | 'total-desc' | 'total-asc' | 'status'
@@ -32,12 +33,19 @@ const at = (iso: string) => new Date(iso).getTime()
 
 export function Orders() {
   const { db } = useData()
-  const { navigate } = useRoute()
-  const [filter, setFilter] = useState<Filter>('all')
+  const { route, navigate } = useRoute()
+  const filterParam = route.query.get('filter')
+  const [filter, setFilter] = useState<OrderFilter>(() => orderFilterFromQuery(filterParam))
   const sort = useSortValue('orders') as Sort
 
+  // Ссылка с главного экрана (#/orders?filter=active) задаёт фильтр. Возврат на
+  // вкладку «Заказы» без параметра показывает весь список.
+  useEffect(() => {
+    setFilter(orderFilterFromQuery(filterParam))
+  }, [filterParam])
+
   const orders = db.getOrders()
-  const filtered = filter === 'all' ? orders : orders.filter((o) => o.status === filter)
+  const filtered = orders.filter((o) => matchesOrderFilter(o, filter))
   const sorted = [...filtered].sort((a, b) => {
     switch (sort) {
       case 'date-asc':

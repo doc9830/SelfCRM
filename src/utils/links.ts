@@ -1,0 +1,46 @@
+// Адреса экранов и разбор их параметров. Плашки на главном экране ведут на
+// конкретный список заказов и на раздел статистики, поэтому параметры адреса —
+// часть контракта экранов, а не разовая договорённость.
+import { ORDER_STATUSES, isActiveStatus, type Order, type OrderStatus } from '../types'
+import { PERIOD_KEYS, type PeriodKey } from './stats'
+
+// Фильтр списка заказов. «Активные» — это группа статусов (новый + в работе),
+// а не отдельный статус заказа.
+export type OrderFilter = 'all' | 'active' | OrderStatus
+
+export const ORDER_FILTERS: OrderFilter[] = ['all', 'active', ...ORDER_STATUSES]
+
+export const ORDER_FILTER_LABEL: Record<OrderFilter, string> = {
+  all: 'Все',
+  active: 'Активные',
+  new: 'Новые',
+  in_progress: 'В работе',
+  done: 'Завершённые',
+  cancelled: 'Отменённые',
+}
+
+// Ссылки для плашек на главном экране.
+export const ACTIVE_ORDERS_LINK = '/orders?filter=active'
+
+export function statisticsLink(period: PeriodKey): string {
+  return `/statistics?period=${period}`
+}
+
+export function matchesOrderFilter(order: Order, filter: OrderFilter): boolean {
+  if (filter === 'all') return true
+  if (filter === 'active') return isActiveStatus(order.status)
+  return order.status === filter
+}
+
+// Значение параметра filter из адреса. Пустое или неизвестное значение — «Все».
+export function orderFilterFromQuery(value: string | null): OrderFilter {
+  const normalized = (value ?? '').trim().toLowerCase()
+  return (ORDER_FILTERS as string[]).includes(normalized) ? (normalized as OrderFilter) : 'all'
+}
+
+// Значение параметра period из адреса. null — параметр не задан или некорректен,
+// тогда экран статистики оставляет свой период по умолчанию.
+export function statisticsPeriodFromQuery(value: string | null): PeriodKey | null {
+  const normalized = (value ?? '').trim().toLowerCase()
+  return (PERIOD_KEYS as string[]).includes(normalized) ? (normalized as PeriodKey) : null
+}

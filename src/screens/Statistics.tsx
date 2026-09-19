@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Badge, Button, EmptyState, Field, Input, cx } from '../components/ui'
 import { useRoute } from '../router'
 import { useData } from '../state/DataContext'
 import { ORDER_STATUSES, ORDER_STATUS_LABEL } from '../types'
 import { formatDate, money, plural } from '../utils/format'
+import { statisticsPeriodFromQuery } from '../utils/links'
 import { statusTone } from '../utils/status'
 import {
   filterOrdersByRange,
@@ -29,10 +30,19 @@ const NO_CLIENT = '__none__'
 
 export function Statistics() {
   const { db, version } = useData()
-  const { navigate } = useRoute()
-  const [period, setPeriod] = useState<PeriodKey>('month')
+  const { route, navigate } = useRoute()
+  const periodParam = route.query.get('period')
+  const [period, setPeriod] = useState<PeriodKey>(
+    () => statisticsPeriodFromQuery(periodParam) ?? 'month',
+  )
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
+
+  // Плашка «Выручка» на главном экране ведёт на #/statistics?period=month.
+  useEffect(() => {
+    const fromQuery = statisticsPeriodFromQuery(periodParam)
+    if (fromQuery) setPeriod(fromQuery)
+  }, [periodParam])
 
   const { range, orders, summary, clients, items } = useMemo(() => {
     const bounds = periodRange(period, new Date(), { from, to })

@@ -3,6 +3,18 @@ import { round2 } from './format'
 
 export type PeriodKey = 'today' | 'week' | 'month' | 'quarter' | 'year' | 'all' | 'custom'
 
+// Единый список периодов: используется чипами на экране статистики и разбором
+// параметра period из адреса (utils/links.ts).
+export const PERIOD_KEYS: PeriodKey[] = [
+  'today',
+  'week',
+  'month',
+  'quarter',
+  'year',
+  'all',
+  'custom',
+]
+
 // Границы периода в миллисекундах; null означает «без ограничения».
 export interface DateRange {
   from: number | null

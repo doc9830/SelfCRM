@@ -2,18 +2,17 @@ import { useRoute } from '../router'
 import { useData } from '../state/DataContext'
 import { isActiveStatus, isService } from '../types'
 import { money, plural } from '../utils/format'
+import { ACTIVE_ORDERS_LINK, statisticsLink } from '../utils/links'
 import { Icon, type IconName } from '../components/Icons'
 
 export function Dashboard() {
   const { db } = useData()
   const { navigate } = useRoute()
 
-  const clients = db.getClients()
   const orders = db.getOrders()
   const products = db.getProducts()
 
   const activeOrders = orders.filter((o) => isActiveStatus(o.status))
-  const doneOrders = orders.filter((o) => o.status === 'done')
   const revenue = orders
     .filter((o) => o.status !== 'cancelled')
     .reduce((sum, o) => sum + db.getOrderTotal(o), 0)
@@ -21,11 +20,20 @@ export function Dashboard() {
 
   return (
     <div>
+      {/* Плашки кликабельны: активные заказы открывают список новых и «в работе»,
+          выручка — статистику с периодом «Месяц». */}
       <div className="stat-grid">
-        <Stat value={String(clients.length)} label="Клиенты" />
-        <Stat value={String(activeOrders.length)} label="Активные заказы" />
-        <Stat value={String(doneOrders.length)} label="Завершённые" />
-        <Stat value={money(revenue)} label="Выручка" accent />
+        <Stat
+          value={String(activeOrders.length)}
+          label="Активные заказы"
+          onClick={() => navigate(ACTIVE_ORDERS_LINK)}
+        />
+        <Stat
+          value={money(revenue)}
+          label="Выручка"
+          accent
+          onClick={() => navigate(statisticsLink('month'))}
+        />
       </div>
 
       <div className="section">
@@ -64,12 +72,25 @@ export function Dashboard() {
   )
 }
 
-function Stat({ value, label, accent }: { value: string; label: string; accent?: boolean }) {
+function Stat({
+  value,
+  label,
+  accent,
+  onClick,
+}: {
+  value: string
+  label: string
+  accent?: boolean
+  onClick: () => void
+}) {
   return (
-    <div className="stat">
-      <div className={accent ? 'stat-value stat-accent' : 'stat-value'}>{value}</div>
-      <div className="stat-label">{label}</div>
-    </div>
+    <button className="stat stat-btn" onClick={onClick}>
+      <span className="stat-arrow" aria-hidden="true">
+        <Icon name="chevron-right" size={16} />
+      </span>
+      <span className={accent ? 'stat-value stat-accent' : 'stat-value'}>{value}</span>
+      <span className="stat-label">{label}</span>
+    </button>
   )
 }
 
