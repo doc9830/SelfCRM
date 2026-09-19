@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { toAddressEntries, type DadataSuggestion } from './dadata'
 
 describe('toAddressEntries', () => {
@@ -43,5 +43,34 @@ describe('toAddressEntries', () => {
   it('пустой/неопределённый список даёт пустой результат', () => {
     expect(toAddressEntries([])).toEqual([])
     expect(toAddressEntries(undefined as unknown as DadataSuggestion[])).toEqual([])
+  })
+})
+
+describe('suggestAddresses без ключа', () => {
+  it('не обращается к сервису и сообщает об отсутствии ключа', async () => {
+    vi.resetModules()
+    vi.stubEnv('VITE_DADATA_TOKEN', '')
+
+    const mod = await import('./dadata')
+    const fetchSpy = vi.spyOn(globalThis, 'fetch')
+
+    expect(mod.hasDadataToken()).toBe(false)
+    await expect(mod.suggestAddresses('г Москва, ул Тверская')).rejects.toThrow(/not configured/)
+    expect(fetchSpy).not.toHaveBeenCalled()
+
+    fetchSpy.mockRestore()
+    vi.unstubAllEnvs()
+    vi.resetModules()
+  })
+
+  it('пустой запрос не требует ключа и не делает сетевых вызовов', async () => {
+    vi.resetModules()
+    vi.stubEnv('VITE_DADATA_TOKEN', '')
+
+    const mod = await import('./dadata')
+    await expect(mod.suggestAddresses('   ')).resolves.toEqual([])
+
+    vi.unstubAllEnvs()
+    vi.resetModules()
   })
 })

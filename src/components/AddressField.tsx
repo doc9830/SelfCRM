@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Icon } from './Icons'
 import { loadAddresses, searchAddresses, type AddressEntry } from '../db/addresses'
-import { suggestAddresses } from '../api/dadata'
+import { suggestAddresses, hasDadataToken } from '../api/dadata'
 
 const DEBOUNCE_MS = 300
 
@@ -127,9 +127,13 @@ export function AddressField({
               ))}
               {fallback && (
                 <div className="address-status">
-                  {results.length > 0
-                    ? 'Сервис недоступен — показана локальная база'
-                    : 'Сервис недоступен, совпадений нет'}
+                  {hasDadataToken()
+                    ? results.length > 0
+                      ? 'Сервис недоступен — показана локальная база'
+                      : 'Сервис недоступен, совпадений нет'
+                    : results.length > 0
+                      ? 'Подсказки Дадаты отключены — показана локальная база'
+                      : 'Подсказки Дадаты отключены, в локальной базе совпадений нет'}
                 </div>
               )}
             </>

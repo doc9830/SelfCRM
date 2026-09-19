@@ -2,6 +2,9 @@ package com.example.selfcrm;
 
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageInfo;
+import android.content.pm.PackageManager;
+import android.content.pm.Signature;
 import android.net.Uri;
 import android.os.Build;
 import android.provider.Settings;
@@ -18,6 +21,9 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.security.MessageDigest;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * Скачивает APK обновления во временный каталог приложения и запускает
@@ -29,6 +35,13 @@ public class AppInstallerPlugin extends Plugin {
 
     private static final String PROGRESS_EVENT = "progress";
     private static final String APK_MIME = "application/vnd.android.package-archive";
+
+    // Флаги для чтения подписей пакета: на Android 9+ — современный API,
+    // на более старых — устаревший, но всё ещё рабочий GET_SIGNATURES.
+    private static final int SIGNATURE_FLAGS =
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.P
+            ? PackageManager.GET_SIGNING_CERTIFICATES
+            : PackageManager.GET_SIGNATURES;
 
     /** Скачивает файл во временный каталог и шлёт события "progress". */
     @PluginMethod
@@ -133,6 +146,15 @@ public class AppInstallerPlugin extends Plugin {
 
         Context context = getContext();
 
+        // Проверяем, что скачанный файл — действительно обновление SelfCRM с той же подписью,
+        // что у установленного приложения. Android и сам не позволит поставить APK с другой
+        // подписью, но проверка даёт понятную ошибку сразу, а не после передачи файла установщику.
+        String signatureError = verifyUpdateApk(apk);
+        if (signatureError != null) {
+            call.reject(signatureError);
+            return;
+        }
+
         // Android 8+ требует разрешение «Установка из неизвестных источников».
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             if (!context.getPackageManager().canRequestPackageInstalls()) {
@@ -174,6 +196,83 @@ public class AppInstallerPlugin extends Plugin {
         JSObject result = new JSObject();
         result.put("value", true);
         call.resolve(result);
+    }
+
+    /**
+     * Проверяет скачанный APK перед установкой.
+     * Возвращает текст ошибки или null, если файл можно ставить.
+     */
+    @SuppressWarnings("deprecation")
+    private String verifyUpdateApk(File apk) {
+        PackageManager manager = getContext().getPackageManager();
+        String packageName = getContext().getPackageName();
+        String path = apk.getAbsolutePath();
+
+        PackageInfo archive;
+        PackageInfo installed;
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                archive = manager.getPackageArchiveInfo(path, PackageManager.PackageInfoFlags.of(SIGNATURE_FLAGS));
+                installed = manager.getPackageInfo(packageName, PackageManager.PackageInfoFlags.of(SIGNATURE_FLAGS));
+            } else {
+                archive = manager.getPackageArchiveInfo(path, SIGNATURE_FLAGS);
+                installed = manager.getPackageInfo(packageName, SIGNATURE_FLAGS);
+            }
+        } catch (Exception e) {
+            return "Не удалось проверить обновление: " + e.getMessage();
+        }
+
+        if (archive == null) {
+            return "Файл обновления повреждён или не является APK — скачайте его заново";
+        }
+        if (!packageName.equals(archive.packageName)) {
+            return "Файл обновления относится к другому приложению — скачайте его заново";
+        }
+
+        Set<String> archiveDigests = signerDigests(archive);
+        Set<String> installedDigests = signerDigests(installed);
+        if (archiveDigests.isEmpty() || installedDigests.isEmpty()) {
+            return "Не удалось прочитать подпись обновления — скачайте файл заново";
+        }
+        archiveDigests.retainAll(installedDigests);
+        if (archiveDigests.isEmpty()) {
+            return "Обновление подписано другим ключом и не может быть установлено. Скачайте APK со страницы релиза проекта";
+        }
+        return null;
+    }
+
+    /** SHA-256 отпечатки сертификатов, которыми подписан пакет. */
+    @SuppressWarnings("deprecation")
+    private static Set<String> signerDigests(PackageInfo info) {
+        Set<String> digests = new HashSet<>();
+        if (info == null) {
+            return digests;
+        }
+
+        Signature[] signatures = null;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && info.signingInfo != null) {
+            signatures = info.signingInfo.getApkContentsSigners();
+        } else if (info.signatures != null) {
+            signatures = info.signatures;
+        }
+        if (signatures == null) {
+            return digests;
+        }
+
+        for (Signature signature : signatures) {
+            try {
+                byte[] hash = MessageDigest.getInstance("SHA-256").digest(signature.toByteArray());
+                StringBuilder hex = new StringBuilder(hash.length * 2);
+                for (byte b : hash) {
+                    hex.append(Character.forDigit((b >> 4) & 0xF, 16));
+                    hex.append(Character.forDigit(b & 0xF, 16));
+                }
+                digests.add(hex.toString());
+            } catch (Exception ignored) {
+                // Некорректная подпись — просто не учитываем её.
+            }
+        }
+        return digests;
     }
 
     private void notifyProgress(int received, int total) {

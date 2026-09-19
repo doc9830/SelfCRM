@@ -1,8 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- allowBackup=false: данные приложения (localStorage WebView с клиентами и заказами)
+         не выгружаются в облачный бэкап Google и не переносятся через adb backup.
+         Пользователь управляет копиями сам: Настройки → Резервная копия. -->
     <application
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"

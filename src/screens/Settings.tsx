@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react'
 import { Button, Card, Field, Input, cx } from '../components/ui'
-import { downloadBackup, readBackupFile } from '../db/backup'
+import { Icon } from '../components/Icons'
+import { downloadBackup, downloadJson, readBackupFile } from '../db/backup'
 import { parseAddresses, saveAddresses } from '../db/addresses'
 import { seedDemo } from '../db/seed'
 import { useData } from '../state/DataContext'
@@ -12,6 +13,11 @@ import { useRoute } from '../router'
 import { APP_VERSION } from '../version'
 
 const isDev = import.meta.env.DEV
+
+// Метка времени для имён скачиваемых файлов (как в src/db/backup.ts).
+function fileStamp(): string {
+  return new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')
+}
 
 type UpdateState =
   | { status: 'idle' }
@@ -129,8 +135,72 @@ export function Settings() {
     }
   }
 
+  // Копии данных, сохранённые приложением: нечитаемые значения и состояние перед импортом.
+  const corruptedKeys = db.listCorruptedBackups()
+  const loadWarning = db.getLoadWarning()
+
+  const handleDownloadCorrupted = () => {
+    const [key] = corruptedKeys
+    const raw = key ? db.readCorruptedBackup(key) : null
+    if (!raw) {
+      window.alert('Копия повреждённых данных не найдена')
+      return
+    }
+    downloadJson(raw, `selfcrm-corrupt-${fileStamp()}.json`)
+  }
+
+  const handleDownloadPreImport = () => {
+    const json = db.readPreImportBackup()
+    if (!json) {
+      window.alert('Копия данных до импорта не найдена')
+      return
+    }
+    downloadJson(json, `selfcrm-before-import-${fileStamp()}.json`)
+  }
+
   return (
     <div>
+      {loadWarning && (
+        <Card className="settings-group">
+          <div
+            className="limit-banner"
+            style={{ background: 'var(--danger-soft)', color: 'var(--danger)', marginBottom: 0 }}
+          >
+            <span className="limit-banner-icon">
+              <Icon name="alert" size={18} />
+            </span>
+            <span className="limit-banner-text">{loadWarning}</span>
+          </div>
+          <div className="settings-row">
+            <div>
+              <div className="settings-row-title">Скачать повреждённые данные</div>
+              <div className="settings-row-desc">
+                Файл с исходным содержимым хранилища — его можно открыть или прислать для разбора
+              </div>
+            </div>
+            <Button size="sm" variant="secondary" icon="download" onClick={handleDownloadCorrupted}>
+              Скачать
+            </Button>
+          </div>
+          <div className="settings-row">
+            <div>
+              <div className="settings-row-title">Скрыть предупреждение</div>
+              <div className="settings-row-desc">Копия останется в хранилище приложения</div>
+            </div>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => {
+                db.clearLoadWarning()
+                refresh()
+              }}
+            >
+              Понятно
+            </Button>
+          </div>
+        </Card>
+      )}
+
       <Card className="settings-group">
         <div className="settings-row">
           <div>
@@ -182,7 +252,9 @@ export function Settings() {
         <div className="settings-row">
           <div>
             <div className="settings-row-title">Импорт</div>
-            <div className="settings-row-desc">Восстановить данные из файла</div>
+            <div className="settings-row-desc">
+              Восстановить данные из файла — текущее состояние сохраняется
+            </div>
           </div>
           <Button
             size="sm"
@@ -193,6 +265,32 @@ export function Settings() {
             Загрузить
           </Button>
         </div>
+        {db.hasPreImportBackup() && (
+          <div className="settings-row">
+            <div>
+              <div className="settings-row-title">Данные до импорта</div>
+              <div className="settings-row-desc">
+                Копия состояния базы перед последним импортом или сбросом
+              </div>
+            </div>
+            <Button size="sm" variant="secondary" icon="download" onClick={handleDownloadPreImport}>
+              Скачать
+            </Button>
+          </div>
+        )}
+        {corruptedKeys.length > 0 && (
+          <div className="settings-row">
+            <div>
+              <div className="settings-row-title">Повреждённые данные</div>
+              <div className="settings-row-desc">
+                Сохранённые копии значений, которые не удалось прочитать: {corruptedKeys.length}
+              </div>
+            </div>
+            <Button size="sm" variant="secondary" icon="download" onClick={handleDownloadCorrupted}>
+              Скачать
+            </Button>
+          </div>
+        )}
       </Card>
 
       <Card className="settings-group">
@@ -242,7 +340,11 @@ export function Settings() {
             variant="danger"
             icon="trash"
             onClick={() => {
-              if (window.confirm('Удалить все данные? Это действие необратимо.')) {
+              if (
+                window.confirm(
+                  'Удалить все данные? Копия текущего состояния сохранится — её можно будет скачать в разделе «Резервная копия».',
+                )
+              ) {
                 db.reset()
                 refresh()
               }

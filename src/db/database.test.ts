@@ -1,7 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { Client, Order, Product } from '../types'
 import { Database } from './database'
-import { MemoryStore } from './kvstore'
+import { MemoryStore, type KVStore } from './kvstore'
 
 function setup() {
   const store = new MemoryStore()
@@ -145,6 +145,113 @@ describe('Database: резервные копии', () => {
     second.importData(json)
     expect(second.getClients()).toHaveLength(1)
     expect(second.getClient('c1')?.name).toBe('Иван')
+  })
+})
+
+describe('Database: сохранность данных', () => {
+  it('повреждённое значение не затирается, а сохраняется в копию', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const store = new MemoryStore()
+    const broken = '{"clients": [{"id": "c1"'
+    store.setItem('selfcrm:data', broken)
+
+    const db = new Database(store)
+
+    expect(db.getClients()).toEqual([])
+    expect(db.getLoadWarning()).toBeTruthy()
+
+    const copies = db.listCorruptedBackups()
+    expect(copies).toHaveLength(1)
+    expect(db.readCorruptedBackup(copies[0])).toBe(broken)
+
+    warn.mockRestore()
+  })
+
+  it('значение неожиданного формата тоже сохраняется в копию', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const store = new MemoryStore()
+    store.setItem('selfcrm:data', '"это не база"')
+
+    const db = new Database(store)
+
+    expect(db.listCorruptedBackups()).toHaveLength(1)
+    expect(db.getLoadWarning()).toContain('формат')
+    warn.mockRestore()
+  })
+
+  it('предупреждение можно скрыть', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const store = new MemoryStore()
+    store.setItem('selfcrm:data', '{')
+
+    const db = new Database(store)
+    expect(db.getLoadWarning()).toBeTruthy()
+
+    db.clearLoadWarning()
+    expect(db.getLoadWarning()).toBeNull()
+    warn.mockRestore()
+  })
+
+  it('импорт сохраняет копию состояния до замены базы', () => {
+    const { db } = setup()
+    db.saveClient({ id: 'c1', name: 'Иван', phone: '', email: '', comment: '', createdAt: '' })
+
+    const replacement = new Database(new MemoryStore()).exportData()
+    db.importData(replacement)
+
+    expect(db.getClients()).toHaveLength(0)
+    expect(db.hasPreImportBackup()).toBe(true)
+
+    const previous = db.readPreImportBackup()
+    expect(previous).toBeTruthy()
+    const parsed = JSON.parse(previous as string) as { clients: Client[] }
+    expect(parsed.clients[0].name).toBe('Иван')
+  })
+
+  it('сброс данных тоже сохраняет копию предыдущего состояния', () => {
+    const { db } = setup()
+    db.saveClient({ id: 'c1', name: 'Иван', phone: '', email: '', comment: '', createdAt: '' })
+
+    db.reset()
+
+    expect(db.getClients()).toHaveLength(0)
+    expect(db.readPreImportBackup()).toContain('Иван')
+  })
+
+  it('для пустой базы копия перед импортом не создаётся', () => {
+    const { db } = setup()
+    db.importData(db.exportData())
+    expect(db.hasPreImportBackup()).toBe(false)
+  })
+
+  it('хранит не более трёх копий предыдущего состояния', () => {
+    // Обёртка над MemoryStore, чтобы видеть, какие ключи реально лежат в хранилище.
+    const inner = new MemoryStore()
+    const keys = new Set<string>()
+    const tracking: KVStore = {
+      getItem: (key) => inner.getItem(key),
+      setItem: (key, value) => {
+        keys.add(key)
+        inner.setItem(key, value)
+      },
+      removeItem: (key) => {
+        keys.delete(key)
+        inner.removeItem(key)
+      },
+    }
+
+    const db = new Database(tracking)
+    db.saveClient({ id: 'c1', name: 'Иван', phone: '', email: '', comment: '', createdAt: '' })
+
+    for (let i = 0; i < 5; i += 1) {
+      db.importData(db.exportData())
+    }
+
+    const copies = [...keys].filter(
+      (key) => key.startsWith('selfcrm:data:pre-import-') && key !== 'selfcrm:data:pre-import-index',
+    )
+    expect(copies.length).toBeLessThanOrEqual(3)
+    expect(db.readPreImportBackup()).toContain('clients')
   })
 })
 

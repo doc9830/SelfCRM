@@ -32,6 +32,11 @@ jobs:
 
       - name: Build
         run: npm run build
+        env:
+          # Ключ подсказок Дадаты: хранится в секретах репозитория (Settings → Secrets and
+          # variables → Actions), а не в исходниках. Если секрет не задан, переменная пустая
+          # и подсказки адресов на веб-версии работают по локальной базе.
+          VITE_DADATA_TOKEN: ${{ secrets.VITE_DADATA_TOKEN }}
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

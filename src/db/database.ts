@@ -14,6 +14,20 @@ import { localStorageStore, type KVStore } from './kvstore'
 const STORAGE_KEY = 'selfcrm:data'
 const SCHEMA_VERSION = 1
 
+// Копии, которые сохраняются рядом с базой:
+//   corrupt-*    — нечитаемые данные (испорченный localStorage), чтобы их можно было выгрузить;
+//   pre-import-* — состояние базы перед последним импортом резервной копии.
+const CORRUPT_KEY_PREFIX = 'selfcrm:data:corrupt-'
+const CORRUPT_INDEX_KEY = 'selfcrm:data:corrupt-index'
+const PRE_IMPORT_KEY_PREFIX = 'selfcrm:data:pre-import-'
+const PRE_IMPORT_INDEX_KEY = 'selfcrm:data:pre-import-index'
+const MAX_CORRUPT_COPIES = 5
+const MAX_PRE_IMPORT_COPIES = 3
+
+function backupStamp(): string {
+  return new Date().toISOString().replace(/[:.]/g, '-')
+}
+
 function emptySnapshot(): DatabaseSnapshot {
   return {
     version: SCHEMA_VERSION,
@@ -27,6 +41,8 @@ function emptySnapshot(): DatabaseSnapshot {
 export class Database {
   private store: KVStore
   private data: DatabaseSnapshot
+  // Предупреждение о проблемах при чтении базы (например, повреждённый localStorage).
+  private loadWarning: string | null = null
 
   constructor(store: KVStore = localStorageStore) {
     this.store = store
@@ -38,23 +54,138 @@ export class Database {
   private load(): DatabaseSnapshot {
     const raw = this.store.getItem(STORAGE_KEY)
     if (!raw) return emptySnapshot()
+
+    let parsed: DatabaseSnapshot | null = null
     try {
-      const parsed = JSON.parse(raw) as DatabaseSnapshot
-      if (!parsed || typeof parsed !== 'object') return emptySnapshot()
-      return {
-        version: SCHEMA_VERSION,
-        clients: Array.isArray(parsed.clients) ? parsed.clients : [],
-        products: Array.isArray(parsed.products) ? parsed.products : [],
-        orders: Array.isArray(parsed.orders) ? parsed.orders : [],
-        settings: parsed.settings ?? { contractor: emptyContractor() },
-      }
+      parsed = JSON.parse(raw) as DatabaseSnapshot
     } catch {
+      this.quarantineCorrupted(raw, 'файл данных не читается')
       return emptySnapshot()
+    }
+
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      this.quarantineCorrupted(raw, 'неизвестный формат данных')
+      return emptySnapshot()
+    }
+
+    return {
+      version: SCHEMA_VERSION,
+      clients: Array.isArray(parsed.clients) ? parsed.clients : [],
+      products: Array.isArray(parsed.products) ? parsed.products : [],
+      orders: Array.isArray(parsed.orders) ? parsed.orders : [],
+      settings: parsed.settings ?? { contractor: emptyContractor() },
     }
   }
 
   private persist(): void {
     this.store.setItem(STORAGE_KEY, JSON.stringify(this.data))
+  }
+
+  // ----- сохранность данных -----
+
+  // Испорченное значение не затираем: сохраняем его под отдельным ключом,
+  // чтобы пользователь мог скачать файл и восстановить данные вручную.
+  private quarantineCorrupted(raw: string, reason: string): void {
+    const key = `${CORRUPT_KEY_PREFIX}${backupStamp()}`
+    let saved = false
+    try {
+      this.store.setItem(key, raw)
+      this.rememberBackupKey(CORRUPT_INDEX_KEY, key, MAX_CORRUPT_COPIES)
+      saved = true
+    } catch {
+      saved = false
+    }
+
+    if (saved) {
+      // Копия сохранена, поэтому исходный ключ освобождаем: иначе при следующем
+      // запуске тех же данных появилась бы ещё одна копия.
+      try {
+        this.store.removeItem(STORAGE_KEY)
+      } catch {
+        // Ничего страшного: основное значение будет перезаписано при первом сохранении.
+      }
+    }
+
+    this.loadWarning =
+      `Данные не загружены: ${reason}. ` +
+      (saved
+        ? 'Исходный файл сохранён — его можно скачать в разделе «Резервная копия».'
+        : 'Сохранить копию не удалось. Если есть резервная копия в файле — восстановите данные из неё.')
+    console.warn(`SelfCRM: ${reason}; копия данных: ${saved ? key : 'не сохранена'}`)
+  }
+
+  // Запоминает ключ новой копии в индексе (от новых к старым) и удаляет лишние.
+  private rememberBackupKey(indexKey: string, key: string, limit: number): void {
+    const previous = this.readBackupKeys(indexKey)
+    const keys = [key, ...previous.filter((item) => item !== key)].slice(0, limit)
+    const dropped = previous.filter((item) => !keys.includes(item))
+
+    this.store.setItem(indexKey, JSON.stringify(keys))
+    for (const old of dropped) {
+      try {
+        this.store.removeItem(old)
+      } catch {
+        // Не критично: старая копия просто останется в хранилище.
+      }
+    }
+  }
+
+  private readBackupKeys(indexKey: string): string[] {
+    const raw = this.store.getItem(indexKey)
+    if (!raw) return []
+    try {
+      const parsed = JSON.parse(raw)
+      return Array.isArray(parsed) ? parsed.filter((key): key is string => typeof key === 'string') : []
+    } catch {
+      return []
+    }
+  }
+
+  // Копия текущих данных перед импортом: импорт полностью заменяет базу, и без копии
+  // ошибка в файле означала бы потерю всех данных.
+  private savePreImportCopy(): void {
+    const isEmpty =
+      this.data.clients.length === 0 && this.data.products.length === 0 && this.data.orders.length === 0
+    if (isEmpty) return
+
+    const key = `${PRE_IMPORT_KEY_PREFIX}${backupStamp()}`
+    try {
+      this.store.setItem(key, JSON.stringify(this.data))
+      this.rememberBackupKey(PRE_IMPORT_INDEX_KEY, key, MAX_PRE_IMPORT_COPIES)
+    } catch {
+      // Нет места в хранилище — импорт всё равно выполняем.
+    }
+  }
+
+  /** Предупреждение о проблемах при чтении базы данных или null, если всё в порядке. */
+  getLoadWarning(): string | null {
+    return this.loadWarning
+  }
+
+  /** Скрывает предупреждение (пользователь его прочитал). */
+  clearLoadWarning(): void {
+    this.loadWarning = null
+  }
+
+  /** Ключи сохранённых копий нечитаемых данных (от новых к старым). */
+  listCorruptedBackups(): string[] {
+    return this.readBackupKeys(CORRUPT_INDEX_KEY)
+  }
+
+  /** Сырое содержимое сохранённой копии нечитаемых данных. */
+  readCorruptedBackup(key: string): string | null {
+    return this.listCorruptedBackups().includes(key) ? this.store.getItem(key) : null
+  }
+
+  /** Есть ли копия данных, сделанная перед последним импортом. */
+  hasPreImportBackup(): boolean {
+    return this.readBackupKeys(PRE_IMPORT_INDEX_KEY).length > 0
+  }
+
+  /** JSON данных до последнего импорта — можно сохранить в файл и восстановить прежнее состояние. */
+  readPreImportBackup(): string | null {
+    const [key] = this.readBackupKeys(PRE_IMPORT_INDEX_KEY)
+    return key ? this.store.getItem(key) : null
   }
 
   private cloneClient(c: Client): Client {
@@ -234,6 +365,9 @@ export class Database {
     if (!parsed || !Array.isArray(parsed.clients) || !Array.isArray(parsed.orders)) {
       throw new Error('Некорректный файл резервной копии')
     }
+    // Импорт полностью заменяет базу, поэтому сначала сохраняем текущее состояние:
+    // его можно скачать и вернуть всё назад.
+    this.savePreImportCopy()
     this.data = {
       version: SCHEMA_VERSION,
       clients: parsed.clients ?? [],
@@ -245,9 +379,12 @@ export class Database {
   }
 
   reset(): void {
+    this.savePreImportCopy()
     this.data = emptySnapshot()
     this.persist()
   }
+
+  // ----- вспомогательное -----
 
   // ----- вспомогательное -----
 

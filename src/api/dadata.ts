@@ -12,11 +12,19 @@ import type { AddressEntry } from '../db/addresses'
 
 const SUGGEST_URL = 'https://suggestions.dadata.ru/suggestions/api/4_1/rs/suggest/address'
 
-// API-ключ (токен). Переопределяется переменной окружения VITE_DADATA_TOKEN
-// (файл .env.local). Секретный ключ здесь не используется и не должен попадать в клиент.
-const API_KEY: string =
-  (import.meta.env.VITE_DADATA_TOKEN as string | undefined)?.trim() ||
-  'ed2c8d74724ab327c38b3914628dfac36148c153'
+// API-ключ (токен) подсказок. В исходниках не хранится: подставляется на этапе сборки
+// переменной окружения VITE_DADATA_TOKEN (локально — файл .env.local, который не коммитится;
+// для CI/Pages — секрет репозитория). Так ключ не попадает в публичный код проекта, но
+// остаётся в собранном приложении — сервис работает у пользователя «из коробки»,
+// собственный ключ вводить не нужно. Секретный ключ (X-Secret) здесь не используется
+// и не должен попадать в клиент.
+const API_KEY: string = ((import.meta.env.VITE_DADATA_TOKEN as string | undefined) ?? '').trim()
+
+// Есть ли ключ в текущей сборке. Если нет (например, сборка без .env.local),
+// автодополнение адресов работает по локальной базе (см. components/AddressField.tsx).
+export function hasDadataToken(): boolean {
+  return API_KEY.length > 0
+}
 
 export interface DadataSuggestionData {
   geo_lat?: string | null
@@ -64,6 +72,11 @@ export function toAddressEntries(suggestions: DadataSuggestion[]): AddressEntry[
 export async function suggestAddresses(query: string, count = 8): Promise<AddressEntry[]> {
   const q = query.trim()
   if (!q) return []
+
+  // Сборка без ключа: не обращаемся к сервису, вызывающий код переключается на локальную базу.
+  if (!hasDadataToken()) {
+    throw new Error('Dadata token is not configured (VITE_DADATA_TOKEN)')
+  }
 
   const response = await fetch(SUGGEST_URL, {
     method: 'POST',
