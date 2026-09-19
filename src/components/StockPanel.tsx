@@ -10,17 +10,11 @@ import { formatShortDate, plural } from '../utils/format'
 import { formatStockDelta, stockMoveTitle, stockMoveTone } from '../utils/stock'
 import { Button, Field, Input, cx } from './ui'
 
-// Учёт остатка: приход, расход, корректировка и история движения товара.
-// Один и тот же блок используется на экране «Склад» и в карточке товара,
-// поэтому текущий остаток и история всегда читаются из базы заново.
-export function StockPanel({
-  productId,
-  historyLimit,
-}: {
-  productId: string
-  // Сколько последних движений показывать; без ограничения — все.
-  historyLimit?: number
-}) {
+// Учёт остатка: приход, расход, корректировка и вся история движения товара.
+// Блок живёт только на экране товара в разделе «Склад» (маршрут /stock/<id>):
+// в карточке товара история убрана, чтобы одни и те же данные не дублировались.
+// Остаток и история всегда читаются из базы заново.
+export function StockPanel({ productId }: { productId: string }) {
   const { db, refresh } = useData()
   const [kind, setKind] = useState<ManualStockMoveKind>('in')
   const [value, setValue] = useState('')
@@ -31,7 +25,6 @@ export function StockPanel({
   if (!product) return null
 
   const moves = db.getStockMoves(productId)
-  const shown = typeof historyLimit === 'number' ? moves.slice(0, historyLimit) : moves
 
   const amount = value.trim() === '' ? Number.NaN : Number(value)
   const preview = !Number.isFinite(amount)
@@ -130,20 +123,15 @@ export function StockPanel({
       </Button>
 
       <div className="section-title" style={{ margin: '18px 0 8px' }}>
-        История товара
+        Движение товара
       </div>
-      {shown.length === 0 ? (
+      {moves.length === 0 ? (
         <div className="stock-history-empty">Движений пока не было</div>
       ) : (
         <div className="stock-history">
-          {shown.map((move) => (
+          {moves.map((move) => (
             <StockMoveRow key={move.id} move={move} />
           ))}
-        </div>
-      )}
-      {typeof historyLimit === 'number' && moves.length > historyLimit && (
-        <div className="field-hint" style={{ marginTop: 6 }}>
-          Показаны последние {historyLimit} из {moves.length}
         </div>
       )}
     </div>

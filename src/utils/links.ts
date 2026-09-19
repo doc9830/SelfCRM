@@ -44,3 +44,32 @@ export function statisticsPeriodFromQuery(value: string | null): PeriodKey | nul
   const normalized = (value ?? '').trim().toLowerCase()
   return (PERIOD_KEYS as string[]).includes(normalized) ? (normalized as PeriodKey) : null
 }
+
+// Вид списка клиентов. Архив — это тот же `/clients` с параметром archive, поэтому
+// состояние переключателя живёт в адресе, а не в памяти экрана.
+export const CLIENTS_ARCHIVE_LINK = '/clients?archive=1'
+
+// Значение параметра archive из адреса: «1»/«true» — архив, всё остальное — активные.
+export function clientsArchiveFromQuery(value: string | null): boolean {
+  const normalized = (value ?? '').trim().toLowerCase()
+  return normalized === '1' || normalized === 'true'
+}
+
+// Ссылка переключателя в шапке: включённый архив открывает архив, выключенный — активных.
+export function clientsLink(archived: boolean): string {
+  return archived ? CLIENTS_ARCHIVE_LINK : '/clients'
+}
+
+// Метка «пришли из архива» в адресе карточки клиента.
+export const CLIENTS_FROM_ARCHIVE = 'archive'
+
+// Ссылка на карточку: архивный клиент помнит, что возврат должен вести в архив.
+export function clientLink(id: string, archived = false): string {
+  return archived ? `/clients/${id}?from=${CLIENTS_FROM_ARCHIVE}` : `/clients/${id}`
+}
+
+// Куда ведёт кнопка «Назад» из карточки клиента.
+export function clientCardBackFromQuery(value: string | null): string {
+  const normalized = (value ?? '').trim().toLowerCase()
+  return normalized === CLIENTS_FROM_ARCHIVE ? CLIENTS_ARCHIVE_LINK : '/clients'
+}

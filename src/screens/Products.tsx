@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { StockPanel } from '../components/StockPanel'
 import { Badge, Button, EmptyState, Fab, Field, Input, Modal, Select, Textarea } from '../components/ui'
 import { Icon } from '../components/Icons'
 import { useData } from '../state/DataContext'
@@ -230,7 +229,7 @@ function ProductForm({
         {kind === 'product' && !initial && (
           <Field
             label="На складе"
-            hint="Стартовый остаток: в истории товара он появится как «Поступление»"
+            hint="Стартовый остаток: в разделе «Склад» он появится как «Поступление»"
           >
             <Input
               type="number"
@@ -260,8 +259,8 @@ function ProductForm({
         </Field>
 
         {initial && kind === 'product' && (
-          <div className="stock-section">
-            <StockPanel productId={initial.id} historyLimit={6} />
+          <div className="field-hint">
+            Остаток и история движения — в разделе «Склад»: нажмите на товар в списке.
           </div>
         )}
 

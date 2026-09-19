@@ -4,6 +4,7 @@ import { SortMenu } from './SortMenu'
 import { useRoute } from '../router'
 import { useTheme } from '../state/ThemeContext'
 import { sortScopeForRoute } from '../state/SortContext'
+import { clientsArchiveFromQuery, clientsLink } from '../utils/links'
 import { cx } from './ui'
 
 const NAV_ITEMS: Array<{ path: string; label: string; icon: IconName }> = [
@@ -28,6 +29,10 @@ export function Layout({
   const root = route.segments[0] ?? ''
   // Сортировка доступна только на экранах-списках — там в шапке появляется значок.
   const sortScope = sortScopeForRoute(route.segments)
+  // Архив клиентов: значок показывается только на списке (не в карточке клиента)
+  // и остаётся подсвеченным, пока открыт архив. Второе нажатие снимает выделение.
+  const clientsList = route.segments.length === 1 && root === 'clients'
+  const clientsArchived = clientsList && clientsArchiveFromQuery(route.query.get('archive'))
 
   const isActive = (path: string) =>
     path === '/' ? root === '' : root === path.slice(1)
@@ -47,6 +52,17 @@ export function Layout({
         <div className="app-header-title">{title}</div>
         <div className="app-header-actions">
           {sortScope && <SortMenu scope={sortScope} />}
+          {clientsList && (
+            <button
+              className={cx('icon-btn', clientsArchived && 'icon-btn-active')}
+              onClick={() => navigate(clientsLink(!clientsArchived))}
+              aria-pressed={clientsArchived}
+              aria-label={clientsArchived ? 'Активные клиенты' : 'Архив клиентов'}
+              title={clientsArchived ? 'Активные клиенты' : 'Архив клиентов'}
+            >
+              <Icon name="archive" size={22} />
+            </button>
+          )}
           <button
             className="icon-btn"
             onClick={toggleTheme}

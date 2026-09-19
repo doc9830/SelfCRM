@@ -10,6 +10,8 @@ import { Products } from './screens/Products'
 import { Settings } from './screens/Settings'
 import { Statistics } from './screens/Statistics'
 import { Stock } from './screens/Stock'
+import { StockProduct } from './screens/StockProduct'
+import { clientCardBackFromQuery, clientsArchiveFromQuery } from './utils/links'
 
 export function App() {
   return (
@@ -36,13 +38,13 @@ function renderScreen() {
     case 'clients':
       if (seg[1]) {
         return (
-          <Layout title="Клиент" back="/clients">
+          <Layout title="Клиент" back={clientCardBackFromQuery(route.query.get('from'))}>
             <ClientDetail id={seg[1]} />
           </Layout>
         )
       }
       return (
-        <Layout title="Клиенты">
+        <Layout title={clientsArchiveFromQuery(route.query.get('archive')) ? 'Архив' : 'Клиенты'}>
           <Clients />
         </Layout>
       )
@@ -69,6 +71,13 @@ function renderScreen() {
       )
 
     case 'stock':
+      if (seg[1]) {
+        return (
+          <Layout title="Движение товара" back="/stock">
+            <StockProduct id={seg[1]} />
+          </Layout>
+        )
+      }
       return (
         <Layout title="Склад">
           <Stock />

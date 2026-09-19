@@ -121,6 +121,14 @@ button {
   background: var(--bg);
 }
 
+/* Активная кнопка шапки: сейчас это значок архива клиентов — пока открыт архив,
+   он подсвечен, второе нажатие снимает выделение и возвращает активных. */
+.icon-btn-active,
+.icon-btn-active:active {
+  color: var(--primary);
+  background: var(--primary-soft);
+}
+
 /* ---- Контент ---- */
 
 .app-main {
@@ -1195,6 +1203,15 @@ button {
   border-radius: var(--radius);
   padding: 13px 14px;
   box-shadow: var(--shadow);
+  /* Строка — кнопка: тап открывает экран товара с движением и остатком. */
+  width: 100%;
+  text-align: left;
+  color: var(--text);
+  font-size: inherit;
+}
+
+.stock-row:active {
+  background: var(--bg);
 }
 
 .stock-row-low {
@@ -1215,6 +1232,9 @@ button {
 .stock-bar {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .stock-bar-name {
@@ -1229,12 +1249,13 @@ button {
   color: var(--text-muted);
 }
 
-/* ---- История движения товара ---- */
-
-.stock-section {
-  border-top: 1px solid var(--border);
-  padding-top: 14px;
+/* Стрелка справа: подсказывает, что строка склада открывает экран товара. */
+.stock-chevron {
+  display: inline-flex;
+  color: var(--text-muted);
 }
+
+/* ---- Движение товара ---- */
 
 .stock-summary {
   display: flex;
