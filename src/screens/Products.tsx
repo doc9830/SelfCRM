@@ -2,24 +2,18 @@ import { useState } from 'react'
 import { Badge, Button, EmptyState, Fab, Field, Input, Modal, Select, Textarea } from '../components/ui'
 import { Icon } from '../components/Icons'
 import { useData } from '../state/DataContext'
+import { useSortValue } from '../state/SortContext'
 import { isService, type Product, type ProductKind } from '../types'
 import { money, plural } from '../utils/format'
 import { uid } from '../utils/id'
 
+// Варианты сортировки заданы в state/SortContext.tsx — их показывает значок в шапке.
 type Sort = 'name' | 'stock-desc' | 'stock-asc' | 'price-desc' | 'price-asc'
-
-const SORTS: Array<{ value: Sort; label: string }> = [
-  { value: 'name', label: 'По алфавиту' },
-  { value: 'stock-desc', label: 'Остаток: по убыванию' },
-  { value: 'stock-asc', label: 'Остаток: по возрастанию' },
-  { value: 'price-desc', label: 'Цена: по убыванию' },
-  { value: 'price-asc', label: 'Цена: по возрастанию' },
-]
 
 export function Products() {
   const { db, refresh } = useData()
   const [query, setQuery] = useState('')
-  const [sort, setSort] = useState<Sort>('name')
+  const sort = useSortValue('products') as Sort
   const [editing, setEditing] = useState<Product | 'new' | null>(null)
 
   const products = db.getProducts()
@@ -54,17 +48,6 @@ export function Products() {
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
-      </div>
-
-      <div className="sort-row">
-        <span className="sort-label">Сортировка</span>
-        <Select value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
-          {SORTS.map((s) => (
-            <option key={s.value} value={s.value}>
-              {s.label}
-            </option>
-          ))}
-        </Select>
       </div>
 
       {filtered.length === 0 ? (

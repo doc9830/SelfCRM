@@ -2,6 +2,9 @@ import { Capacitor, registerPlugin, type PluginListenerHandle } from '@capacitor
 import { Browser } from '@capacitor/browser'
 import { GITHUB_REPO } from './version'
 
+// Маршрут раздела «Настройки → Обновления»: открывается уведомлением о новой версии.
+export const UPDATE_SECTION_PATH = '/settings?section=updates'
+
 export interface ReleaseInfo {
   version: string
   name: string

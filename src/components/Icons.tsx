@@ -26,6 +26,7 @@ export type IconName =
   | 'sun'
   | 'refresh'
   | 'chart'
+  | 'sort'
 
 const stroke = {
   fill: 'none',
@@ -181,6 +182,15 @@ const ICONS: Record<IconName, ReactNode> = {
       <line x1="6" y1="20" x2="6" y2="14" />
       <line x1="12" y1="20" x2="12" y2="4" />
       <line x1="18" y1="20" x2="18" y2="10" />
+    </>
+  ),
+  // Стрелки вверх/вниз — переключатель сортировки.
+  sort: (
+    <>
+      <path d="M7 20V4" />
+      <polyline points="3 8 7 4 11 8" />
+      <path d="M17 4v16" />
+      <polyline points="13 16 17 20 21 16" />
     </>
   ),
 }

@@ -1,4 +1,5 @@
 import { Layout } from './components/Layout'
+import { UpdateToast } from './components/UpdateToast'
 import { useRoute } from './router'
 import { ClientDetail } from './screens/ClientDetail'
 import { Clients } from './screens/Clients'
@@ -11,6 +12,15 @@ import { Statistics } from './screens/Statistics'
 import { Stock } from './screens/Stock'
 
 export function App() {
+  return (
+    <>
+      {renderScreen()}
+      <UpdateToast />
+    </>
+  )
+}
+
+function renderScreen() {
   const { route } = useRoute()
   const seg = route.segments
   const root = seg[0] ?? ''

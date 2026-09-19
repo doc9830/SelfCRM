@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { Badge, Button, EmptyState, Fab, Select } from '../components/ui'
+import { Badge, Button, EmptyState, Fab } from '../components/ui'
 import { useRoute } from '../router'
 import { useData } from '../state/DataContext'
+import { useSortValue } from '../state/SortContext'
 import { ORDER_STATUS_LABEL, type OrderStatus } from '../types'
 import { formatDate, money, plural } from '../utils/format'
 import { statusTone } from '../utils/status'
@@ -17,15 +18,8 @@ const FILTERS: Array<{ value: Filter; label: string }> = [
   { value: 'cancelled', label: 'Отменённые' },
 ]
 
+// Варианты сортировки заданы в state/SortContext.tsx — их показывает значок в шапке.
 type Sort = 'date-desc' | 'date-asc' | 'total-desc' | 'total-asc' | 'status'
-
-const SORTS: Array<{ value: Sort; label: string }> = [
-  { value: 'date-desc', label: 'Сначала новые' },
-  { value: 'date-asc', label: 'Сначала старые' },
-  { value: 'total-desc', label: 'Сумма: по убыванию' },
-  { value: 'total-asc', label: 'Сумма: по возрастанию' },
-  { value: 'status', label: 'По статусу' },
-]
 
 const STATUS_RANK: Record<OrderStatus, number> = {
   new: 0,
@@ -40,7 +34,7 @@ export function Orders() {
   const { db } = useData()
   const { navigate } = useRoute()
   const [filter, setFilter] = useState<Filter>('all')
-  const [sort, setSort] = useState<Sort>('date-desc')
+  const sort = useSortValue('orders') as Sort
 
   const orders = db.getOrders()
   const filtered = filter === 'all' ? orders : orders.filter((o) => o.status === filter)
@@ -71,17 +65,6 @@ export function Orders() {
             {f.label}
           </button>
         ))}
-      </div>
-
-      <div className="sort-row">
-        <span className="sort-label">Сортировка</span>
-        <Select value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
-          {SORTS.map((s) => (
-            <option key={s.value} value={s.value}>
-              {s.label}
-            </option>
-          ))}
-        </Select>
       </div>
 
       {filtered.length === 0 ? (

@@ -1,7 +1,9 @@
 import type { ReactNode } from 'react'
 import { Icon, type IconName } from './Icons'
+import { SortMenu } from './SortMenu'
 import { useRoute } from '../router'
 import { useTheme } from '../state/ThemeContext'
+import { sortScopeForRoute } from '../state/SortContext'
 import { cx } from './ui'
 
 const NAV_ITEMS: Array<{ path: string; label: string; icon: IconName }> = [
@@ -24,13 +26,15 @@ export function Layout({
   const { route, navigate } = useRoute()
   const { theme, toggleTheme } = useTheme()
   const root = route.segments[0] ?? ''
+  // Сортировка доступна только на экранах-списках — там в шапке появляется значок.
+  const sortScope = sortScopeForRoute(route.segments)
 
   const isActive = (path: string) =>
     path === '/' ? root === '' : root === path.slice(1)
 
   return (
     <div className="app">
-      <header className="app-header">
+      <header className={cx('app-header', sortScope && 'app-header-wide')}>
         <div className="app-header-left">
           {back ? (
             <button className="icon-btn" onClick={() => navigate(back)} aria-label="Назад">
@@ -42,6 +46,7 @@ export function Layout({
         </div>
         <div className="app-header-title">{title}</div>
         <div className="app-header-actions">
+          {sortScope && <SortMenu scope={sortScope} />}
           <button
             className="icon-btn"
             onClick={toggleTheme}

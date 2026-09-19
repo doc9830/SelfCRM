@@ -1,5 +1,5 @@
-import { useRef, useState, type ChangeEvent } from 'react'
-import { Button, Card, Field, Input } from '../components/ui'
+import { useEffect, useRef, useState, type ChangeEvent } from 'react'
+import { Button, Card, Field, Input, cx } from '../components/ui'
 import { downloadBackup, readBackupFile } from '../db/backup'
 import { parseAddresses, saveAddresses } from '../db/addresses'
 import { seedDemo } from '../db/seed'
@@ -8,6 +8,7 @@ import { useTheme } from '../state/ThemeContext'
 import { emptyContractor, type Contractor } from '../types'
 import { Capacitor } from '@capacitor/core'
 import { downloadUpdate, fetchLatestRelease, installUpdate, isNewerVersion, openExternal, type ReleaseInfo } from '../updates'
+import { useRoute } from '../router'
 import { APP_VERSION } from '../version'
 
 const isDev = import.meta.env.DEV
@@ -29,9 +30,14 @@ type UpdateState =
 export function Settings() {
   const { db, refresh } = useData()
   const { theme, toggleTheme } = useTheme()
+  const { route } = useRoute()
   const fileRef = useRef<HTMLInputElement>(null)
   const addressFileRef = useRef<HTMLInputElement>(null)
+  const updatesRef = useRef<HTMLDivElement>(null)
+  const autoCheckedRef = useRef(false)
   const [update, setUpdate] = useState<UpdateState>({ status: 'idle' })
+  // Переход из уведомления о новой версии: «/settings?section=updates».
+  const highlightUpdates = route.query.get('section') === 'updates'
 
   const checkUpdates = async () => {
     setUpdate({ status: 'checking' })
@@ -53,6 +59,22 @@ export function Settings() {
       })
     }
   }
+
+  // Переход по уведомлению о новой версии: прокручиваем к блоку «Обновления»
+  // и сразу запускаем проверку, чтобы не пришлось нажимать кнопку.
+  useEffect(() => {
+    if (!highlightUpdates) return
+    const timer = window.setTimeout(() => {
+      updatesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 80)
+    return () => window.clearTimeout(timer)
+  }, [highlightUpdates])
+
+  useEffect(() => {
+    if (!highlightUpdates || autoCheckedRef.current) return
+    autoCheckedRef.current = true
+    void checkUpdates()
+  }, [highlightUpdates, checkUpdates])
 
   const startUpdate = async (release: ReleaseInfo) => {
     const apkUrl = release.apkUrl
@@ -231,79 +253,76 @@ export function Settings() {
         </div>
       </Card>
 
-      <Card className="settings-group">
-        <div className="section-title" style={{ marginBottom: 6 }}>
-          Обновления
-        </div>
-        <div className="settings-row">
-          <div>
-            <div className="settings-row-title">Проверить обновления</div>
-            <div className="settings-row-desc">Текущая версия {APP_VERSION}</div>
+      <div ref={updatesRef}>
+        <Card className={cx('settings-group', highlightUpdates && 'settings-group-highlight')}>
+          <div className="section-title" style={{ marginBottom: 6 }}>
+            Обновления
           </div>
-          <Button
-            size="sm"
-            variant="secondary"
-            icon="refresh"
-            disabled={update.status === 'checking'}
-            onClick={() => void checkUpdates()}
-          >
-            {update.status === 'checking' ? 'Проверка…' : 'Проверить'}
-          </Button>
-        </div>
-
-        {update.status === 'error' && (
-          <div className="limit-banner" style={{ marginTop: 8, marginBottom: 0 }}>
-            <span className="limit-banner-text">{update.message}</span>
-          </div>
-        )}
-
-        {update.status === 'up-to-date' && (
-          <div className="field-hint" style={{ marginTop: 8 }}>
-            У вас установлена последняя версия.
-          </div>
-        )}
-
-        {update.status === 'available' && (
-          <div style={{ marginTop: 10 }}>
-            <div className="settings-row-title" style={{ marginBottom: 4 }}>
-              Доступна версия {update.release.version}
+          <div className="settings-row">
+            <div>
+              <div className="settings-row-title">Проверить обновления</div>
+              <div className="settings-row-desc">Текущая версия {APP_VERSION}</div>
             </div>
-            {update.release.notes && (
-              <div
-                className="settings-row-desc"
-                style={{ whiteSpace: 'pre-wrap', marginBottom: 10 }}
-              >
-                {update.release.notes.slice(0, 1200)}
-              </div>
-            )}
             <Button
               size="sm"
-              variant="primary"
-              icon="download"
-              disabled={update.busy}
-              onClick={() => void startUpdate(update.release)}
+              variant="secondary"
+              icon="refresh"
+              disabled={update.status === 'checking'}
+              onClick={() => void checkUpdates()}
             >
-              {update.busy
-                ? update.downloaded
-                  ? 'Запуск…'
-                  : `Скачивание… ${Math.round(update.progress * 100)}%`
-                : update.downloaded
-                  ? 'Установить'
-                  : 'Скачать и установить'}
+              {update.status === 'checking' ? 'Проверка…' : 'Проверить'}
             </Button>
-            {update.error && (
-              <div className="limit-banner" style={{ marginTop: 8, marginBottom: 0 }}>
-                <span className="limit-banner-text">{update.error}</span>
-              </div>
-            )}
-            {update.downloaded && !update.busy && !update.error && (
-              <div className="field-hint" style={{ marginTop: 8 }}>
-                Файл скачан. Если установка не запустилась, нажмите «Установить».
-              </div>
-            )}
           </div>
-        )}
-      </Card>
+
+          {update.status === 'error' && (
+            <div className="limit-banner" style={{ marginTop: 8, marginBottom: 0 }}>
+              <span className="limit-banner-text">{update.message}</span>
+            </div>
+          )}
+
+          {update.status === 'up-to-date' && (
+            <div className="field-hint" style={{ marginTop: 8 }}>
+              У вас установлена последняя версия.
+            </div>
+          )}
+
+          {update.status === 'available' && (
+            <div style={{ marginTop: 10 }}>
+              <div className="settings-row-title" style={{ marginBottom: 4 }}>
+                Доступна версия {update.release.version}
+              </div>
+              {update.release.notes && (
+                <div className="settings-row-desc release-notes">{update.release.notes.slice(0, 1200)}</div>
+              )}
+              <Button
+                size="sm"
+                variant="primary"
+                icon="download"
+                disabled={update.busy}
+                onClick={() => void startUpdate(update.release)}
+              >
+                {update.busy
+                  ? update.downloaded
+                    ? 'Запуск…'
+                    : `Скачивание… ${Math.round(update.progress * 100)}%`
+                  : update.downloaded
+                    ? 'Установить'
+                    : 'Скачать и установить'}
+              </Button>
+              {update.error && (
+                <div className="limit-banner" style={{ marginTop: 8, marginBottom: 0 }}>
+                  <span className="limit-banner-text">{update.error}</span>
+                </div>
+              )}
+              {update.downloaded && !update.busy && !update.error && (
+                <div className="field-hint" style={{ marginTop: 8 }}>
+                  Файл скачан. Если установка не запустилась, нажмите «Установить».
+                </div>
+              )}
+            </div>
+          )}
+        </Card>
+      </div>
 
       <Card>
         <div className="settings-row-title">SelfCRM</div>
