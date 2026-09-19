@@ -7,7 +7,8 @@
 
 - Node.js 18+
 - [Android Studio](https://developer.android.com/studio) с Android SDK
-- JDK 17
+- JDK 21 — Capacitor и Android Gradle Plugin собирают release именно на JDK 21
+  (на JDK 17 сборка завершается ошибкой)
 - Переменные окружения: `ANDROID_HOME` (или `ANDROID_SDK_ROOT`) указывает на SDK
 
 ## Шаги
@@ -77,3 +78,44 @@ Capacitor-плагинов для этого не требуется.
 Кнопка «Настройки → Обновления → Проверить» запрашивает последний релиз из GitHub-репозитория
 (`doc9830/SelfCRM`) и сравнивает его версию с текущей. Если доступна новая версия, приложение
 предлагает скачать APK со страницы релиза (открывается в системном браузере).
+
+## Релизная сборка (подписанный APK)
+
+Порядок выпуска новой версии:
+
+1. Поднимите версию в `src/version.ts` (`APP_VERSION`) и в `android/app/build.gradle`
+   (`versionCode` увеличивается на 1, `versionName` совпадает с `APP_VERSION`).
+2. Соберите веб-часть и синхронизируйте её с Android-проектом:
+
+   ```bash
+   npm run build
+   npx cap sync android
+   ```
+
+3. Соберите подписанный release-APK, указав **JDK 21**:
+
+   ```bash
+   cd android
+   JAVA_HOME=/path/to/jdk-21 ./gradlew assembleRelease
+   ```
+
+   Реквизиты подписи лежат в `android/keystore.properties` (файл и `*.keystore` не коммитятся,
+   см. `android/.gitignore`):
+
+   ```properties
+   storeFile=selfcrm-release.keystore
+   storePassword=<пароль хранилища>
+   keyAlias=selfcrm
+   keyPassword=<пароль ключа>
+   ```
+
+   Если `keystore.properties` отсутствует, сборка не падает, но APK остаётся неподписанным
+   (`android/app/build/outputs/apk/release/app-release-unsigned.apk`) и на устройстве не
+   установится.
+
+4. Готовый файл: `android/app/build/outputs/apk/release/app-release.apk`.
+5. Создайте релиз на GitHub с тегом `v<версия>` (например `v1.0.6`), приложите APK и опишите
+   изменения — приложение показывает это описание при проверке обновлений.
+
+> Переменные окружения для терминала: `ANDROID_HOME`/`ANDROID_SDK_ROOT` — путь к Android SDK,
+> `JAVA_HOME` — путь к JDK 21. Сборка release на JDK 17 завершается ошибкой.

@@ -147,3 +147,43 @@ describe('Database: резервные копии', () => {
     expect(second.getClient('c1')?.name).toBe('Иван')
   })
 })
+
+describe('Database: услуги', () => {
+  it('услуга не изменяет остаток ни при оформлении, ни при отмене заказа', () => {
+    const { db } = setup()
+    db.saveProduct(
+      makeProduct({ id: 's1', name: 'Выезд мастера', price: 1500, stock: 0, minStock: 0, kind: 'service' }),
+    )
+    expect(db.getProduct('s1')?.kind).toBe('service')
+
+    const order = db.createOrderDraft()
+    order.items = [{ productId: 's1', name: 'Выезд мастера', price: 1500, qty: 2 }]
+    db.saveOrder(order)
+    expect(db.getProduct('s1')?.stock).toBe(0)
+
+    db.saveOrder({ ...order, status: 'cancelled' })
+    expect(db.getProduct('s1')?.stock).toBe(0)
+
+    db.deleteOrder(order.id)
+    expect(db.getProduct('s1')?.stock).toBe(0)
+  })
+
+  it('в заказе с товаром и услугой склад меняется только по товару', () => {
+    const { db } = setup()
+    db.saveProduct(makeProduct({ id: 'p1', stock: 10 }))
+    db.saveProduct(
+      makeProduct({ id: 's1', name: 'Услуга', price: 500, stock: 0, minStock: 0, kind: 'service' }),
+    )
+
+    const order = db.createOrderDraft()
+    order.items = [
+      { productId: 'p1', name: 'Товар', price: 100, qty: 4 },
+      { productId: 's1', name: 'Услуга', price: 500, qty: 1 },
+    ]
+    db.saveOrder(order)
+
+    expect(db.getProduct('p1')?.stock).toBe(6)
+    expect(db.getProduct('s1')?.stock).toBe(0)
+  })
+})
+

@@ -7,6 +7,7 @@ import { OrderDetail } from './screens/OrderDetail'
 import { Orders } from './screens/Orders'
 import { Products } from './screens/Products'
 import { Settings } from './screens/Settings'
+import { Statistics } from './screens/Statistics'
 import { Stock } from './screens/Stock'
 
 export function App() {
@@ -61,6 +62,13 @@ export function App() {
       return (
         <Layout title="Склад">
           <Stock />
+        </Layout>
+      )
+
+    case 'statistics':
+      return (
+        <Layout title="Статистика" back="/">
+          <Statistics />
         </Layout>
       )
 

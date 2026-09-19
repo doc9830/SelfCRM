@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Badge, Button, EmptyState, Fab } from '../components/ui'
+import { Badge, Button, EmptyState, Fab, Select } from '../components/ui'
 import { useRoute } from '../router'
 import { useData } from '../state/DataContext'
 import { ORDER_STATUS_LABEL, type OrderStatus } from '../types'
@@ -17,13 +17,47 @@ const FILTERS: Array<{ value: Filter; label: string }> = [
   { value: 'cancelled', label: 'Отменённые' },
 ]
 
+type Sort = 'date-desc' | 'date-asc' | 'total-desc' | 'total-asc' | 'status'
+
+const SORTS: Array<{ value: Sort; label: string }> = [
+  { value: 'date-desc', label: 'Сначала новые' },
+  { value: 'date-asc', label: 'Сначала старые' },
+  { value: 'total-desc', label: 'Сумма: по убыванию' },
+  { value: 'total-asc', label: 'Сумма: по возрастанию' },
+  { value: 'status', label: 'По статусу' },
+]
+
+const STATUS_RANK: Record<OrderStatus, number> = {
+  new: 0,
+  in_progress: 1,
+  done: 2,
+  cancelled: 3,
+}
+
+const at = (iso: string) => new Date(iso).getTime()
+
 export function Orders() {
   const { db } = useData()
   const { navigate } = useRoute()
   const [filter, setFilter] = useState<Filter>('all')
+  const [sort, setSort] = useState<Sort>('date-desc')
 
   const orders = db.getOrders()
   const filtered = filter === 'all' ? orders : orders.filter((o) => o.status === filter)
+  const sorted = [...filtered].sort((a, b) => {
+    switch (sort) {
+      case 'date-asc':
+        return at(a.date) - at(b.date)
+      case 'total-desc':
+        return db.getOrderTotal(b) - db.getOrderTotal(a)
+      case 'total-asc':
+        return db.getOrderTotal(a) - db.getOrderTotal(b)
+      case 'status':
+        return STATUS_RANK[a.status] - STATUS_RANK[b.status] || at(b.date) - at(a.date)
+      default:
+        return at(b.date) - at(a.date)
+    }
+  })
 
   return (
     <div>
@@ -39,6 +73,17 @@ export function Orders() {
         ))}
       </div>
 
+      <div className="sort-row">
+        <span className="sort-label">Сортировка</span>
+        <Select value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
+          {SORTS.map((s) => (
+            <option key={s.value} value={s.value}>
+              {s.label}
+            </option>
+          ))}
+        </Select>
+      </div>
+
       {filtered.length === 0 ? (
         <EmptyState
           icon="receipt"
@@ -52,7 +97,7 @@ export function Orders() {
         />
       ) : (
         <div className="list">
-          {filtered.map((o) => {
+          {sorted.map((o) => {
             const client = o.clientId ? db.getClient(o.clientId) : undefined
             return (
               <button key={o.id} className="list-item" onClick={() => navigate(`/orders/${o.id}`)}>

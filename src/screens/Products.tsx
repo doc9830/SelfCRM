@@ -1,14 +1,25 @@
 import { useState } from 'react'
-import { Badge, Button, EmptyState, Fab, Field, Input, Modal, Textarea } from '../components/ui'
+import { Badge, Button, EmptyState, Fab, Field, Input, Modal, Select, Textarea } from '../components/ui'
 import { Icon } from '../components/Icons'
 import { useData } from '../state/DataContext'
-import type { Product } from '../types'
+import { isService, type Product, type ProductKind } from '../types'
 import { money, plural } from '../utils/format'
 import { uid } from '../utils/id'
+
+type Sort = 'name' | 'stock-desc' | 'stock-asc' | 'price-desc' | 'price-asc'
+
+const SORTS: Array<{ value: Sort; label: string }> = [
+  { value: 'name', label: 'По алфавиту' },
+  { value: 'stock-desc', label: 'Остаток: по убыванию' },
+  { value: 'stock-asc', label: 'Остаток: по возрастанию' },
+  { value: 'price-desc', label: 'Цена: по убыванию' },
+  { value: 'price-asc', label: 'Цена: по возрастанию' },
+]
 
 export function Products() {
   const { db, refresh } = useData()
   const [query, setQuery] = useState('')
+  const [sort, setSort] = useState<Sort>('name')
   const [editing, setEditing] = useState<Product | 'new' | null>(null)
 
   const products = db.getProducts()
@@ -17,6 +28,20 @@ export function Products() {
     if (!q) return true
     return p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q)
   })
+  const sorted = [...filtered].sort((a, b) => {
+    switch (sort) {
+      case 'stock-desc':
+        return b.stock - a.stock
+      case 'stock-asc':
+        return a.stock - b.stock
+      case 'price-desc':
+        return b.price - a.price
+      case 'price-asc':
+        return a.price - b.price
+      default:
+        return a.name.localeCompare(b.name, 'ru')
+    }
+  })
 
   return (
     <div>
@@ -24,11 +49,22 @@ export function Products() {
         <div className="search">
           <Icon name="search" size={18} />
           <input
-            placeholder="Поиск товара"
+            placeholder="Поиск товара или услуги"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
+      </div>
+
+      <div className="sort-row">
+        <span className="sort-label">Сортировка</span>
+        <Select value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
+          {SORTS.map((s) => (
+            <option key={s.value} value={s.value}>
+              {s.label}
+            </option>
+          ))}
+        </Select>
       </div>
 
       {filtered.length === 0 ? (
@@ -46,17 +82,21 @@ export function Products() {
         />
       ) : (
         <div className="list">
-          {filtered.map((p) => (
+          {sorted.map((p) => (
             <button key={p.id} className="list-item" onClick={() => setEditing(p)}>
               <span className="list-item-main">
                 <span className="list-item-title">{p.name}</span>
                 <span className="list-item-sub">
-                  {p.sku || '—'} · {money(p.price)}
+                  {isService(p) ? 'Услуга' : p.sku || '—'} · {money(p.price)}
                 </span>
               </span>
-              <Badge tone={p.stock <= p.minStock ? 'red' : 'neutral'}>
-                {p.stock} {plural(p.stock, 'шт', 'шт', 'шт')}
-              </Badge>
+              {isService(p) ? (
+                <Badge tone="blue">Услуга</Badge>
+              ) : (
+                <Badge tone={p.stock <= p.minStock ? 'red' : 'neutral'}>
+                  {p.stock} {plural(p.stock, 'шт', 'шт', 'шт')}
+                </Badge>
+              )}
             </button>
           ))}
         </div>
@@ -77,7 +117,7 @@ export function Products() {
             editing === 'new'
               ? undefined
               : () => {
-                  if (window.confirm('Удалить товар? Связанные позиции в заказах сохранятся.')) {
+                  if (window.confirm('Удалить позицию? Связанные строки в заказах сохранятся.')) {
                     db.deleteProduct(editing.id)
                     refresh()
                     setEditing(null)
@@ -107,26 +147,29 @@ function ProductForm({
   const [stock, setStock] = useState(initial ? String(initial.stock) : '')
   const [minStock, setMinStock] = useState(initial ? String(initial.minStock) : '')
   const [description, setDescription] = useState(initial?.description ?? '')
+  const [kind, setKind] = useState<ProductKind>(initial?.kind ?? 'product')
   const [error, setError] = useState('')
 
   const submit = () => {
     if (!name.trim()) {
-      setError('Укажите название товара')
+      setError(kind === 'service' ? 'Укажите название услуги' : 'Укажите название товара')
       return
     }
+    const service = kind === 'service'
     onSave({
       id: initial?.id ?? uid(),
       name: name.trim(),
       sku: sku.trim(),
       price: toNumber(price),
-      stock: Math.round(toNumber(stock)),
-      minStock: Math.round(toNumber(minStock)),
+      stock: service ? 0 : Math.round(toNumber(stock)),
+      minStock: service ? 0 : Math.round(toNumber(minStock)),
       description: description.trim(),
+      kind,
     })
   }
 
   return (
-    <Modal title={initial ? 'Изменить товар' : 'Новый товар'} onClose={onClose}>
+    <Modal title={initial ? 'Изменить позицию' : 'Новая позиция'} onClose={onClose}>
       <div className="form">
         <Field label="Название *" error={error}>
           <Input
@@ -141,6 +184,19 @@ function ProductForm({
         <Field label="Артикул">
           <Input value={sku} onChange={(e) => setSku(e.target.value)} placeholder="SKU-001" />
         </Field>
+        <Field
+          label="Тип позиции"
+          hint={
+            kind === 'service'
+              ? 'Услуга не учитывается на складе и всегда доступна в заказе'
+              : 'Товар списывается со склада при оформлении заказа'
+          }
+        >
+          <Select value={kind} onChange={(e) => setKind(e.target.value as ProductKind)}>
+            <option value="product">Товар</option>
+            <option value="service">Услуга</option>
+          </Select>
+        </Field>
         <div className="item-card-row">
           <Field label="Цена, ₽">
             <Input
@@ -152,28 +208,32 @@ function ProductForm({
               onChange={(e) => setPrice(e.target.value)}
             />
           </Field>
-          <Field label="На складе">
+          {kind === 'product' && (
+            <Field label="На складе">
+              <Input
+                type="number"
+                inputMode="numeric"
+                step="1"
+                value={stock}
+                onChange={(e) => setStock(e.target.value)}
+              />
+            </Field>
+          )}
+        </div>
+        {kind === 'product' && (
+          <Field
+            label="Минимальный остаток"
+            hint="При достижении остатка приложение покажет предупреждение"
+          >
             <Input
               type="number"
               inputMode="numeric"
               step="1"
-              value={stock}
-              onChange={(e) => setStock(e.target.value)}
+              value={minStock}
+              onChange={(e) => setMinStock(e.target.value)}
             />
           </Field>
-        </div>
-        <Field
-          label="Минимальный остаток"
-          hint="При достижении остатка приложение покажет предупреждение"
-        >
-          <Input
-            type="number"
-            inputMode="numeric"
-            step="1"
-            value={minStock}
-            onChange={(e) => setMinStock(e.target.value)}
-          />
-        </Field>
+        )}
         <Field label="Описание">
           <Textarea value={description} onChange={(e) => setDescription(e.target.value)} />
         </Field>
@@ -187,7 +247,7 @@ function ProductForm({
         </div>
         {onDelete && (
           <Button variant="danger" icon="trash" full onClick={onDelete}>
-            Удалить товар
+            {initial && isService(initial) ? 'Удалить услугу' : 'Удалить товар'}
           </Button>
         )}
       </div>

@@ -8,6 +8,7 @@ import {
   ORDER_STATUSES,
   ORDER_STATUS_LABEL,
   emptyContractor,
+  isService,
   type Order,
   type OrderItem,
   type OrderStatus,
@@ -234,7 +235,7 @@ function OrderForm({
   const productOptions: SuggestOption[] = products.map((p) => ({
     id: p.id,
     label: p.name,
-    sub: [p.sku, money(p.price)].filter(Boolean).join(' · '),
+    sub: [isService(p) ? 'Услуга' : p.sku, money(p.price)].filter(Boolean).join(' · '),
   }))
 
   const patchItem = (index: number, patch: Partial<OrderItem>) => {
@@ -347,7 +348,7 @@ function OrderForm({
                           : null
                       }
                       options={productOptions}
-                      placeholder="Поиск товара…"
+                      placeholder="Поиск товара или услуги…"
                       icon="box"
                       emptyLabel="Позиция вручную"
                       revertOnBlur

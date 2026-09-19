@@ -6,7 +6,7 @@ import type {
   Product,
   Settings,
 } from '../types'
-import { emptyContractor } from '../types'
+import { emptyContractor, isService } from '../types'
 import { round2 } from '../utils/format'
 import { uid } from '../utils/id'
 import { localStorageStore, type KVStore } from './kvstore'
@@ -190,7 +190,7 @@ export class Database {
     const qty = this.committedQty(order)
     for (const [productId, amount] of qty) {
       const product = this.data.products.find((p) => p.id === productId)
-      if (product) product.stock += amount
+      if (product && !isService(product)) product.stock += amount
     }
   }
 
@@ -198,7 +198,7 @@ export class Database {
     const qty = this.committedQty(order)
     for (const [productId, amount] of qty) {
       const product = this.data.products.find((p) => p.id === productId)
-      if (product) product.stock -= amount
+      if (product && !isService(product)) product.stock -= amount
     }
   }
 

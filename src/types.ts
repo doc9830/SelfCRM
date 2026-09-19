@@ -13,6 +13,8 @@ export interface Client {
   createdAt: string
 }
 
+export type ProductKind = 'product' | 'service'
+
 export interface Product {
   id: string
   name: string
@@ -21,6 +23,9 @@ export interface Product {
   stock: number
   minStock: number
   description: string
+  // Тип позиции: товар учитывается на складе, услуга — нет.
+  // Поле опционально для совместимости с данными, созданными до его появления.
+  kind?: ProductKind
 }
 
 export interface OrderItem {
@@ -76,4 +81,9 @@ export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
 
 export function isActiveStatus(status: OrderStatus): boolean {
   return status === 'new' || status === 'in_progress'
+}
+
+// Услуга не списывается со склада: она всегда доступна в заказе.
+export function isService(product: Product): boolean {
+  return product.kind === 'service'
 }

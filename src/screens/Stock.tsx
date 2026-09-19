@@ -3,7 +3,7 @@ import { Button, EmptyState, Field, Input, Modal } from '../components/ui'
 import { Icon } from '../components/Icons'
 import { useRoute } from '../router'
 import { useData } from '../state/DataContext'
-import type { Product } from '../types'
+import { isService, type Product } from '../types'
 import { plural } from '../utils/format'
 import { cx } from '../components/ui'
 
@@ -12,7 +12,7 @@ export function Stock() {
   const { navigate } = useRoute()
   const [adjusting, setAdjusting] = useState<Product | null>(null)
 
-  const products = db.getProducts()
+  const products = db.getProducts().filter((p) => !isService(p))
   const low = products.filter((p) => p.stock <= p.minStock)
 
   return (

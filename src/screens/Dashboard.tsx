@@ -1,6 +1,6 @@
 import { useRoute } from '../router'
 import { useData } from '../state/DataContext'
-import { isActiveStatus } from '../types'
+import { isActiveStatus, isService } from '../types'
 import { money, plural } from '../utils/format'
 import { Icon, type IconName } from '../components/Icons'
 
@@ -17,7 +17,7 @@ export function Dashboard() {
   const revenue = orders
     .filter((o) => o.status !== 'cancelled')
     .reduce((sum, o) => sum + db.getOrderTotal(o), 0)
-  const lowStock = products.filter((p) => p.stock <= p.minStock)
+  const lowStock = products.filter((p) => !isService(p) && p.stock <= p.minStock)
 
   return (
     <div>
@@ -37,6 +37,8 @@ export function Dashboard() {
           <QuickBtn icon="receipt" label="Заказ" onClick={() => navigate('/orders/new')} />
           <QuickBtn icon="box" label="Товар" onClick={() => navigate('/products')} />
           <QuickBtn icon="warehouse" label="Склад" onClick={() => navigate('/stock')} />
+          <QuickBtn icon="chart" label="Статистика" onClick={() => navigate('/statistics')} />
+          <QuickBtn icon="settings" label="Настройки" onClick={() => navigate('/settings')} />
         </div>
       </div>
 
