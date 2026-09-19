@@ -1,14 +1,18 @@
 import type {
   Client,
   DatabaseSnapshot,
+  ManualStockMoveKind,
   Order,
   OrderItem,
   Product,
   Settings,
+  StockMove,
+  StockMoveKind,
 } from '../types'
-import { emptyContractor, isService } from '../types'
+import { STOCK_MOVE_LABEL, emptyContractor, isService } from '../types'
 import { round2 } from '../utils/format'
 import { uid } from '../utils/id'
+import { assignMissingNumbers, formatOrderNumber, nextOrderNumber, orderTitle } from '../utils/orders'
 import { localStorageStore, type KVStore } from './kvstore'
 
 const STORAGE_KEY = 'selfcrm:data'
@@ -34,6 +38,7 @@ function emptySnapshot(): DatabaseSnapshot {
     clients: [],
     products: [],
     orders: [],
+    stockMoves: [],
     settings: { contractor: emptyContractor() },
   }
 }
@@ -47,6 +52,7 @@ export class Database {
   constructor(store: KVStore = localStorageStore) {
     this.store = store
     this.data = this.load()
+    this.migrate()
   }
 
   // ----- загрузка / сохранение -----
@@ -73,8 +79,35 @@ export class Database {
       clients: Array.isArray(parsed.clients) ? parsed.clients : [],
       products: Array.isArray(parsed.products) ? parsed.products : [],
       orders: Array.isArray(parsed.orders) ? parsed.orders : [],
+      stockMoves: Array.isArray(parsed.stockMoves) ? parsed.stockMoves : [],
       settings: parsed.settings ?? { contractor: emptyContractor() },
     }
+  }
+
+  // ----- миграция старых данных -----
+
+  // Данные, созданные до появления нумерации заказов, себестоимости и оплат,
+  // достраиваются один раз при загрузке — дальше это обычные поля базы.
+  private migrate(): void {
+    let changed = assignMissingNumbers(this.data.orders)
+
+    for (const order of this.data.orders) {
+      if (!Array.isArray(order.payments)) {
+        order.payments = []
+        changed = true
+      }
+      for (const item of order.items) {
+        if (typeof item.cost === 'number' && Number.isFinite(item.cost)) continue
+        // Снимок себестоимости из каталога: до появления поля её негде было взять.
+        const product = item.productId
+          ? this.data.products.find((p) => p.id === item.productId)
+          : undefined
+        item.cost = typeof product?.cost === 'number' && Number.isFinite(product.cost) ? product.cost : 0
+        changed = true
+      }
+    }
+
+    if (changed) this.persist()
   }
 
   private persist(): void {
@@ -197,7 +230,11 @@ export class Database {
   }
 
   private cloneOrder(o: Order): Order {
-    return { ...o, items: o.items.map((it) => ({ ...it })) }
+    return {
+      ...o,
+      items: o.items.map((it) => ({ ...it })),
+      payments: (o.payments ?? []).map((payment) => ({ ...payment })),
+    }
   }
 
   // ----- клиенты -----
@@ -224,9 +261,8 @@ export class Database {
 
   deleteClient(id: string): void {
     // Каскадно удаляем заказы клиента, чтобы не оставлять «висячих» ссылок.
-    const ordersToDelete = this.data.orders.filter((o) => o.clientId === id)
-    for (const order of ordersToDelete) {
-      this.restoreStock(order)
+    for (const order of this.data.orders.filter((o) => o.clientId === id)) {
+      this.applyOrderStock(order, null, this.orderRemovalNote(order))
     }
     this.data.orders = this.data.orders.filter((o) => o.clientId !== id)
     this.data.clients = this.data.clients.filter((c) => c.id !== id)
@@ -262,6 +298,8 @@ export class Database {
         if (item.productId === id) item.productId = null
       }
     }
+    // История движения нужна только вместе с товаром — удаляем её вместе с ним.
+    this.data.stockMoves = (this.data.stockMoves ?? []).filter((move) => move.productId !== id)
     this.data.products = this.data.products.filter((p) => p.id !== id)
     this.persist()
   }
@@ -285,22 +323,31 @@ export class Database {
 
   saveOrder(order: Order): Order {
     const existing = this.data.orders.find((o) => o.id === order.id)
-    if (existing) {
-      // Возвращаем на склад всё, что было зафиксировано в старой версии заказа.
-      this.restoreStock(existing)
-      Object.assign(existing, this.cloneOrder(order))
-    } else {
-      this.data.orders.push(this.cloneOrder(order))
+    const saved = this.cloneOrder(order)
+    // Номер заказа присваивается при создании; если его почему-то нет — выдаём сейчас.
+    if (typeof saved.number !== 'number' || !Number.isFinite(saved.number)) {
+      saved.number = nextOrderNumber(this.data.orders.filter((o) => o.id !== order.id))
     }
-    // Списываем со склада то, что зафиксировано в новой версии.
-    this.commitStock(order)
+
+    const cancelled = saved.status === 'cancelled' && existing?.status !== 'cancelled'
+    const note = cancelled ? `${orderTitle(saved)} (отменён)` : orderTitle(saved)
+
+    if (existing) {
+      // Остаток пересчитывается по разнице версий заказа и одной записью в истории,
+      // а не двумя («вернули старое» + «списали новое»).
+      this.applyOrderStock(existing, saved, note)
+      Object.assign(existing, saved)
+    } else {
+      this.data.orders.push(saved)
+      this.applyOrderStock(null, saved, note)
+    }
     this.persist()
     return order
   }
 
   deleteOrder(id: string): void {
     const existing = this.data.orders.find((o) => o.id === id)
-    if (existing) this.restoreStock(existing)
+    if (existing) this.applyOrderStock(existing, null, this.orderRemovalNote(existing))
     this.data.orders = this.data.orders.filter((o) => o.id !== id)
     this.persist()
   }
@@ -317,20 +364,84 @@ export class Database {
     return map
   }
 
-  private restoreStock(order: Order): void {
-    const qty = this.committedQty(order)
-    for (const [productId, amount] of qty) {
-      const product = this.data.products.find((p) => p.id === productId)
-      if (product && !isService(product)) product.stock += amount
+  private orderRemovalNote(order: Order): string {
+    const number = formatOrderNumber(order)
+    return number ? `Удаление заказа ${number}` : 'Удаление заказа'
+  }
+
+  // Изменение остатка с записью в историю товара. Услуги на складе не учитываются.
+  private applyStockDelta(productId: string, delta: number, kind: StockMoveKind, note: string): void {
+    if (!delta) return
+    const product = this.data.products.find((p) => p.id === productId)
+    if (!product || isService(product)) return
+
+    product.stock += delta
+    if (!Array.isArray(this.data.stockMoves)) this.data.stockMoves = []
+    this.data.stockMoves.push({
+      id: uid(),
+      productId,
+      date: new Date().toISOString(),
+      delta,
+      kind,
+      note,
+      stockAfter: product.stock,
+    })
+  }
+
+  // Остаток меняется на разницу между «до» и «после»: при редактировании заказа
+  // в историю попадает одно движение, а не возврат и повторное списание.
+  private applyOrderStock(previous: Order | null, next: Order | null, note: string): void {
+    const before = previous ? this.committedQty(previous) : new Map<string, number>()
+    const after = next ? this.committedQty(next) : new Map<string, number>()
+    const productIds = new Set([...before.keys(), ...after.keys()])
+    for (const productId of productIds) {
+      const delta = (before.get(productId) ?? 0) - (after.get(productId) ?? 0)
+      this.applyStockDelta(productId, delta, 'order', note)
     }
   }
 
-  private commitStock(order: Order): void {
-    const qty = this.committedQty(order)
-    for (const [productId, amount] of qty) {
-      const product = this.data.products.find((p) => p.id === productId)
-      if (product && !isService(product)) product.stock -= amount
-    }
+  // ----- история движения товара -----
+
+  /** Движения товара, новые сверху. Без `productId` — история по всем товарам. */
+  getStockMoves(productId?: string): StockMove[] {
+    return (this.data.stockMoves ?? [])
+      .map((move, index) => ({ move, index }))
+      .filter(({ move }) => !productId || move.productId === productId)
+      // Движения одной операции могут совпасть по времени: тогда порядок задаёт
+      // номер записи, поэтому последнее движение всегда оказывается первым.
+      .sort(
+        (a, b) =>
+          new Date(b.move.date).getTime() - new Date(a.move.date).getTime() || b.index - a.index,
+      )
+      .map(({ move }) => ({ ...move }))
+  }
+
+  /**
+   * Ручное движение: «Приход» и «Расход» — количество, «Корректировка» — новый остаток.
+   * Возвращает false, если позиция не найдена, является услугой или остаток не изменился.
+   */
+  applyStockMove(input: {
+    productId: string
+    kind: ManualStockMoveKind
+    value: number
+    comment?: string
+  }): boolean {
+    const product = this.data.products.find((p) => p.id === input.productId)
+    if (!product || isService(product)) return false
+
+    const value = Math.round(input.value)
+    const delta =
+      input.kind === 'adjustment' ? value - product.stock : input.kind === 'in' ? value : -value
+    if (!delta) return false
+
+    this.applyStockDelta(
+      product.id,
+      delta,
+      input.kind,
+      (input.comment ?? '').trim() || STOCK_MOVE_LABEL[input.kind],
+    )
+    this.persist()
+    return true
   }
 
   // ----- суммы -----
@@ -373,8 +484,11 @@ export class Database {
       clients: parsed.clients ?? [],
       products: parsed.products ?? [],
       orders: parsed.orders ?? [],
+      stockMoves: Array.isArray(parsed.stockMoves) ? parsed.stockMoves : [],
       settings: parsed.settings ?? { contractor: emptyContractor() },
     }
+    // Копия могла быть сделана старой версией: достраиваем номера и себестоимость.
+    this.migrate()
     this.persist()
   }
 
@@ -386,21 +500,28 @@ export class Database {
 
   // ----- вспомогательное -----
 
-  // ----- вспомогательное -----
-
   createOrderDraft(clientId: string | null = null): Order {
     return {
       id: uid(),
+      number: nextOrderNumber(this.data.orders),
       clientId,
       date: new Date().toISOString(),
       status: 'new',
       items: [],
+      payments: [],
       comment: '',
     }
   }
 
-  createEmptyItem(): OrderItem {
-    return { productId: null, name: '', price: 0, qty: 1 }
+  createEmptyItem(product?: Product): OrderItem {
+    return {
+      productId: product?.id ?? null,
+      name: product?.name ?? '',
+      price: product?.price ?? 0,
+      // Снимок себестоимости: по нему считается прибыль по заказу.
+      cost: product?.cost ?? 0,
+      qty: 1,
+    }
   }
 }
 

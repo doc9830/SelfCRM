@@ -4,6 +4,8 @@ import {
   filterOrdersByRange,
   groupItemRevenue,
   groupRevenue,
+  orderCost,
+  orderProfit,
   orderTotal,
   periodRange,
   summarizeOrders,
@@ -132,5 +134,52 @@ describe('группировка выручки', () => {
   it('orderTotal суммирует позиции с учётом количества', () => {
     const order = makeOrder({ items: [{ productId: null, name: 'A', price: 10.1, qty: 3 }] })
     expect(orderTotal(order)).toBe(30.3)
+  })
+})
+
+describe('себестоимость и прибыль', () => {
+  it('считает прибыль как выручку минус себестоимость', () => {
+    const orders = [
+      makeOrder({
+        id: 'o1',
+        items: [
+          { productId: 'p1', name: 'Товар', price: 100, qty: 2, cost: 60 },
+          { productId: 's1', name: 'Услуга', price: 1500, qty: 1, cost: 0 },
+        ],
+      }),
+      makeOrder({
+        id: 'o2',
+        status: 'cancelled',
+        items: [{ productId: 'p1', name: 'Товар', price: 500, qty: 1, cost: 100 }],
+      }),
+    ]
+    const summary = summarizeOrders(orders)
+    expect(summary.revenue).toBe(1700)
+    expect(summary.cost).toBe(120)
+    expect(summary.profit).toBe(1580)
+    // Отменённый заказ в прибыль не входит.
+    expect(summary.average).toBe(1700)
+  })
+
+  it('позиция без себестоимости считается полностью прибыльной', () => {
+    const order = makeOrder({ items: [{ productId: 'p1', name: 'Товар', price: 100, qty: 3 }] })
+    expect(orderCost(order)).toBe(0)
+    expect(orderProfit(order)).toBe(300)
+  })
+
+  it('прибыль считается по позициям топа', () => {
+    const items = groupItemRevenue([
+      makeOrder({ items: [{ productId: 'p1', name: 'Товар', price: 100, qty: 2, cost: 40 }] }),
+    ])
+    expect(items[0].total).toBe(200)
+    expect(items[0].profit).toBe(120)
+  })
+
+  it('прибыль считается и по клиентам', () => {
+    const clients = groupRevenue(
+      [makeOrder({ clientId: 'c1', items: [{ productId: 'p1', name: 'Товар', price: 100, qty: 1, cost: 30 }] })],
+      (o) => o.clientId,
+    )
+    expect(clients[0].profit).toBe(70)
   })
 })

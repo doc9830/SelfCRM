@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { buildRouteUri, buildTelUri } from './navigation'
+import {
+  buildRouteUri,
+  buildTelUri,
+  buildTelegramAppUri,
+  buildTelegramUri,
+  buildWhatsAppAppUri,
+  buildWhatsAppUri,
+  openTelegram,
+  openWhatsApp,
+  phoneDigits,
+} from './navigation'
 
 describe('buildRouteUri', () => {
   it('строит geo:-URI с координатами', () => {
@@ -44,5 +54,35 @@ describe('buildTelUri', () => {
 
   it('для пустой строки возвращает только схему', () => {
     expect(buildTelUri('')).toBe('tel:')
+  })
+})
+
+describe('мессенджеры', () => {
+  it('приводит российский номер к международному виду', () => {
+    expect(phoneDigits('8 900 111-22-33')).toBe('79001112233')
+    expect(phoneDigits('+7 (900) 111-22-33')).toBe('79001112233')
+    expect(phoneDigits('900 111-22-33')).toBe('79001112233')
+    expect(phoneDigits('')).toBe('')
+  })
+
+  it('строит веб-ссылку Telegram', () => {
+    expect(buildTelegramUri('+7 900 111-22-33')).toBe('https://t.me/+79001112233')
+  })
+
+  it('строит ссылку приложения Telegram', () => {
+    expect(buildTelegramAppUri('8 900 111-22-33')).toBe('tg://resolve?phone=79001112233')
+  })
+
+  it('строит веб-ссылку WhatsApp', () => {
+    expect(buildWhatsAppUri('8 900 111-22-33')).toBe('https://wa.me/79001112233')
+  })
+
+  it('строит ссылку приложения WhatsApp', () => {
+    expect(buildWhatsAppAppUri('+7 900 111-22-33')).toBe('whatsapp://send?phone=79001112233')
+  })
+
+  it('без номера ничего не открывает', () => {
+    expect(() => openTelegram('')).not.toThrow()
+    expect(() => openWhatsApp('   ')).not.toThrow()
   })
 })

@@ -1,19 +1,20 @@
 import { useState } from 'react'
-import { Button, EmptyState, Field, Input, Modal } from '../components/ui'
+import { StockPanel } from '../components/StockPanel'
+import { Button, EmptyState, Modal, cx } from '../components/ui'
 import { Icon } from '../components/Icons'
 import { useRoute } from '../router'
 import { useData } from '../state/DataContext'
-import { isService, type Product } from '../types'
+import { isService } from '../types'
 import { plural } from '../utils/format'
-import { cx } from '../components/ui'
 
 export function Stock() {
-  const { db, refresh } = useData()
+  const { db } = useData()
   const { navigate } = useRoute()
-  const [adjusting, setAdjusting] = useState<Product | null>(null)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
 
   const products = db.getProducts().filter((p) => !isService(p))
   const low = products.filter((p) => p.stock <= p.minStock)
+  const selected = selectedId ? products.find((p) => p.id === selectedId) : undefined
 
   return (
     <div>
@@ -55,8 +56,8 @@ export function Stock() {
                 </div>
                 <button
                   className="icon-btn"
-                  onClick={() => setAdjusting(p)}
-                  aria-label="Изменить остаток"
+                  onClick={() => setSelectedId(p.id)}
+                  aria-label="Движение и история товара"
                 >
                   <Icon name="edit" size={18} />
                 </button>
@@ -66,61 +67,13 @@ export function Stock() {
         </div>
       )}
 
-      {adjusting && (
-        <AdjustModal
-          product={adjusting}
-          onClose={() => setAdjusting(null)}
-          onSave={(stock) => {
-            db.saveProduct({ ...adjusting, stock })
-            refresh()
-            setAdjusting(null)
-          }}
-        />
+      {selected && (
+        <Modal title={`Склад: ${selected.name}`} onClose={() => setSelectedId(null)}>
+          <div className="form">
+            <StockPanel productId={selected.id} />
+          </div>
+        </Modal>
       )}
     </div>
-  )
-}
-
-function AdjustModal({
-  product,
-  onSave,
-  onClose,
-}: {
-  product: Product
-  onSave: (stock: number) => void
-  onClose: () => void
-}) {
-  const [value, setValue] = useState(String(product.stock))
-
-  return (
-    <Modal title={`Остаток: ${product.name}`} onClose={onClose}>
-      <div className="form">
-        <Field label="Текущий остаток, шт">
-          <Input
-            type="number"
-            inputMode="numeric"
-            step="1"
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            autoFocus
-          />
-        </Field>
-        <div className="form-actions">
-          <Button variant="outline" onClick={onClose}>
-            Отмена
-          </Button>
-          <Button
-            variant="primary"
-            icon="check"
-            onClick={() => {
-              const n = Number(value)
-              onSave(Number.isFinite(n) ? Math.round(n) : product.stock)
-            }}
-          >
-            Сохранить
-          </Button>
-        </div>
-      </div>
-    </Modal>
   )
 }

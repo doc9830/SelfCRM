@@ -74,3 +74,53 @@ export function openTel(phone: string): void {
     window.location.href = uri
   }
 }
+
+// ----- Мессенджеры -----
+//
+// Интеграции с Telegram и WhatsApp нет: приложение только открывает переписку с
+// клиентом по его номеру — в установленном мессенджере или в веб-версии.
+// Телефон приводим к международному виду: «8 900…» и «900…» → «7900…».
+
+export function phoneDigits(phone: string): string {
+  const digits = (phone ?? '').replace(/\D/g, '')
+  if (digits.length === 11 && digits.startsWith('8')) return `7${digits.slice(1)}`
+  if (digits.length === 10) return `7${digits}`
+  return digits
+}
+
+// Веб-ссылка Telegram: открывает чат с номером (в браузере и в приложении).
+export function buildTelegramUri(phone: string): string {
+  return `https://t.me/+${phoneDigits(phone)}`
+}
+
+// Приложение Telegram на Android: схема tg:// надёжнее веб-ссылки.
+export function buildTelegramAppUri(phone: string): string {
+  return `tg://resolve?phone=${phoneDigits(phone)}`
+}
+
+// Веб-ссылка WhatsApp (работает и в браузере, и в приложении).
+export function buildWhatsAppUri(phone: string): string {
+  return `https://wa.me/${phoneDigits(phone)}`
+}
+
+// Приложение WhatsApp на Android.
+export function buildWhatsAppAppUri(phone: string): string {
+  return `whatsapp://send?phone=${phoneDigits(phone)}`
+}
+
+function openMessenger(phone: string, webUri: string, appUri: string): void {
+  if (!phoneDigits(phone)) return
+  if (isNativeAndroid()) {
+    window.open(appUri, '_system')
+    return
+  }
+  window.open(webUri, '_blank', 'noopener')
+}
+
+export function openTelegram(phone: string): void {
+  openMessenger(phone, buildTelegramUri(phone), buildTelegramAppUri(phone))
+}
+
+export function openWhatsApp(phone: string): void {
+  openMessenger(phone, buildWhatsAppUri(phone), buildWhatsAppAppUri(phone))
+}

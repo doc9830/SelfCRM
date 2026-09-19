@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Client, Order, Product } from '../types'
+import { addPayment, orderPaid } from '../utils/payments'
 import { Database } from './database'
 import { MemoryStore, type KVStore } from './kvstore'
 
@@ -291,6 +292,220 @@ describe('Database: услуги', () => {
 
     expect(db.getProduct('p1')?.stock).toBe(6)
     expect(db.getProduct('s1')?.stock).toBe(0)
+  })
+})
+
+describe('Database: номера заказов, себестоимость и оплаты', () => {
+  it('присваивает номер новому заказу и не меняет его при редактировании', () => {
+    const { db } = setup()
+    const first = db.createOrderDraft()
+    expect(first.number).toBe(1)
+    db.saveOrder(first)
+
+    const second = db.createOrderDraft()
+    expect(second.number).toBe(2)
+    db.saveOrder(second)
+    expect(db.createOrderDraft().number).toBe(3)
+
+    // Правка даты не перенумеровывает заказ: номер закреплён за заказом.
+    first.date = new Date(Date.now() + 5000).toISOString()
+    db.saveOrder(first)
+    expect(db.getOrder(first.id)?.number).toBe(1)
+  })
+
+  it('достраивает номера, себестоимость и оплаты в старой базе', () => {
+    const store = new MemoryStore()
+    store.setItem(
+      'selfcrm:data',
+      JSON.stringify({
+        version: 1,
+        clients: [],
+        products: [
+          {
+            id: 'p1',
+            name: 'Товар',
+            sku: '',
+            price: 100,
+            stock: 10,
+            minStock: 1,
+            description: '',
+            cost: 40,
+          },
+        ],
+        orders: [
+          {
+            id: 'o2',
+            clientId: null,
+            date: new Date(2026, 8, 15).toISOString(),
+            status: 'done',
+            items: [{ productId: 'p1', name: 'Товар', price: 100, qty: 2 }],
+            comment: '',
+          },
+          {
+            id: 'o1',
+            clientId: null,
+            date: new Date(2026, 8, 10).toISOString(),
+            status: 'done',
+            items: [{ productId: 'p1', name: 'Товар', price: 100, qty: 1 }],
+            comment: '',
+          },
+        ],
+        settings: {},
+      }),
+    )
+
+    const db = new Database(store)
+
+    // Номера выдаются по возрастанию даты, следующий заказ продолжает нумерацию.
+    expect(db.getOrder('o1')?.number).toBe(1)
+    expect(db.getOrder('o2')?.number).toBe(2)
+    expect(db.createOrderDraft().number).toBe(3)
+    // Снимок себестоимости берётся из каталога, платежи появляются пустым списком.
+    expect(db.getOrder('o1')?.items[0].cost).toBe(40)
+    expect(db.getOrder('o1')?.payments).toEqual([])
+  })
+
+  it('хранит платежи по заказу', () => {
+    const { db } = setup()
+    db.saveProduct(makeProduct({ stock: 10 }))
+    const order = db.createOrderDraft()
+    order.items = [{ productId: 'p1', name: 'Товар', price: 100, qty: 2 }]
+    db.saveOrder(order)
+
+    db.saveOrder(addPayment(order, 100, 'Предоплата'))
+    db.saveOrder(addPayment(db.getOrder(order.id) as Order, 100, 'Доплата'))
+
+    const saved = db.getOrder(order.id) as Order
+    expect(orderPaid(saved)).toBe(200)
+    expect(saved.payments).toHaveLength(2)
+    // Оплата не влияет на склад: списание по заказу остаётся единственным.
+    expect(db.getProduct('p1')?.stock).toBe(8)
+    expect(db.getStockMoves('p1')).toHaveLength(1)
+  })
+})
+
+describe('Database: история движения товара', () => {
+  it('записывает списание по заказу с его номером', () => {
+    const { db } = setup()
+    db.saveProduct(makeProduct({ stock: 10 }))
+    const order = db.createOrderDraft()
+    order.items = [{ productId: 'p1', name: 'Товар', price: 100, qty: 3 }]
+    db.saveOrder(order)
+
+    const moves = db.getStockMoves('p1')
+    expect(moves).toHaveLength(1)
+    expect(moves[0].delta).toBe(-3)
+    expect(moves[0].kind).toBe('order')
+    expect(moves[0].note).toBe(`Заказ №${order.number}`)
+    expect(moves[0].stockAfter).toBe(7)
+  })
+
+  it('при редактировании заказа пишет одно движение на разницу', () => {
+    const { db } = setup()
+    db.saveProduct(makeProduct({ stock: 10 }))
+    const order = db.createOrderDraft()
+    order.items = [{ productId: 'p1', name: 'Товар', price: 100, qty: 3 }]
+    db.saveOrder(order)
+
+    order.items = [{ productId: 'p1', name: 'Товар', price: 100, qty: 1 }]
+    db.saveOrder(order)
+
+    const moves = db.getStockMoves('p1')
+    expect(moves).toHaveLength(2)
+    expect(moves[0].delta).toBe(2)
+    expect(moves[0].stockAfter).toBe(9)
+    expect(db.getProduct('p1')?.stock).toBe(9)
+  })
+
+  it('возвращает остаток при отмене заказа', () => {
+    const { db } = setup()
+    db.saveProduct(makeProduct({ stock: 10 }))
+    const order = db.createOrderDraft()
+    order.items = [{ productId: 'p1', name: 'Товар', price: 100, qty: 2 }]
+    db.saveOrder(order)
+
+    db.saveOrder({ ...order, status: 'cancelled' })
+
+    expect(db.getProduct('p1')?.stock).toBe(10)
+    expect(db.getStockMoves('p1')[0]).toMatchObject({
+      delta: 2,
+      note: `Заказ №${order.number} (отменён)`,
+    })
+  })
+
+  it('возвращает остаток при удалении заказа', () => {
+    const { db } = setup()
+    db.saveProduct(makeProduct({ stock: 10 }))
+    const order = db.createOrderDraft()
+    order.items = [{ productId: 'p1', name: 'Товар', price: 100, qty: 2 }]
+    db.saveOrder(order)
+
+    db.deleteOrder(order.id)
+
+    expect(db.getProduct('p1')?.stock).toBe(10)
+    expect(db.getStockMoves('p1')[0].note).toBe(`Удаление заказа №${order.number}`)
+  })
+
+  it('поддерживает приход, расход и корректировку', () => {
+    const { db } = setup()
+    db.saveProduct(makeProduct({ stock: 15 }))
+
+    expect(
+      db.applyStockMove({ productId: 'p1', kind: 'in', value: 20, comment: 'Поставщик' }),
+    ).toBe(true)
+    expect(db.getProduct('p1')?.stock).toBe(35)
+
+    expect(db.applyStockMove({ productId: 'p1', kind: 'out', value: 8 })).toBe(true)
+    expect(db.getProduct('p1')?.stock).toBe(27)
+
+    // Корректировка выставляет новый остаток: 27 уже стоит, поэтому движения нет.
+    expect(db.applyStockMove({ productId: 'p1', kind: 'adjustment', value: 27 })).toBe(false)
+    expect(db.applyStockMove({ productId: 'p1', kind: 'adjustment', value: 30 })).toBe(true)
+    expect(db.getProduct('p1')?.stock).toBe(30)
+
+    const moves = db.getStockMoves('p1')
+    expect(moves.map((move) => move.delta)).toEqual([3, -8, 20])
+    // Комментарий хранится как причина, название операции добавляет экран склада.
+    expect(moves[2].note).toBe('Поставщик')
+    expect(moves[2].stockAfter).toBe(35)
+    expect(moves[1].note).toBe('Расход')
+    expect(moves[0].kind).toBe('adjustment')
+    expect(moves[0].note).toBe('Корректировка')
+    expect(moves[0].stockAfter).toBe(30)
+  })
+
+  it('не двигает услуги и не пишет движение без изменений', () => {
+    const { db } = setup()
+    db.saveProduct(makeProduct({ id: 's1', name: 'Услуга', kind: 'service', stock: 0 }))
+    db.saveProduct(makeProduct({ stock: 10 }))
+
+    expect(db.applyStockMove({ productId: 's1', kind: 'in', value: 5 })).toBe(false)
+    expect(db.applyStockMove({ productId: 'p1', kind: 'adjustment', value: 10 })).toBe(false)
+    expect(db.applyStockMove({ productId: 'p1', kind: 'out', value: 0 })).toBe(false)
+    expect(db.applyStockMove({ productId: 'нет такого', kind: 'in', value: 1 })).toBe(false)
+    expect(db.getStockMoves()).toEqual([])
+  })
+
+  it('удаляет историю вместе с товаром', () => {
+    const { db } = setup()
+    db.saveProduct(makeProduct({ stock: 10 }))
+    db.applyStockMove({ productId: 'p1', kind: 'in', value: 5 })
+    expect(db.getStockMoves()).toHaveLength(1)
+
+    db.deleteProduct('p1')
+    expect(db.getStockMoves()).toEqual([])
+  })
+
+  it('переносит историю в резервную копию', () => {
+    const { db } = setup()
+    db.saveProduct(makeProduct({ stock: 10 }))
+    db.applyStockMove({ productId: 'p1', kind: 'in', value: 5 })
+
+    const second = new Database(new MemoryStore())
+    second.importData(db.exportData())
+
+    expect(second.getStockMoves('p1')).toHaveLength(1)
+    expect(second.getProduct('p1')?.stock).toBe(15)
   })
 })
 

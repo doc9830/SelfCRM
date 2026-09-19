@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { Badge, Button, Card, EmptyState, Field, Input, Select, Textarea } from '../components/ui'
+import { Badge, Button, Card, EmptyState, Field, Input, Modal, Select, Textarea, cx } from '../components/ui'
 import { Icon } from '../components/Icons'
 import { SuggestField, type SuggestOption } from '../components/SuggestField'
 import { useRoute } from '../router'
@@ -15,7 +15,16 @@ import {
   type Product,
 } from '../types'
 import { fromDateInput, toDateInput } from '../utils/dates'
-import { formatDate, money } from '../utils/format'
+import { formatDate, formatShortDate, marginHint, money } from '../utils/format'
+import { orderHeading, orderTitle } from '../utils/orders'
+import {
+  PAYMENT_STATUS_LABEL,
+  addPayment,
+  orderPaymentState,
+  removePayment,
+  type PaymentState,
+} from '../utils/payments'
+import { orderCost, orderProfit } from '../utils/stats'
 import { statusTone } from '../utils/status'
 
 export function OrderDetail({ id, presetClientId }: { id: string; presetClientId?: string | null }) {
@@ -27,6 +36,8 @@ export function OrderDetail({ id, presetClientId }: { id: string; presetClientId
   const [editing, setEditing] = useState(isNew)
   const [pdfBusy, setPdfBusy] = useState(false)
   const [pdfError, setPdfError] = useState('')
+  // Окно «Добавить оплату» — состояние хука выше ранних выходов (правила хуков).
+  const [paymentOpen, setPaymentOpen] = useState(false)
 
   if (!isNew && !existing) {
     return (
@@ -68,6 +79,8 @@ export function OrderDetail({ id, presetClientId }: { id: string; presetClientId
   const order = existing as Order
   const client = order.clientId ? db.getClient(order.clientId) : undefined
   const total = db.getOrderTotal(order)
+  const payment = orderPaymentState(order)
+  const payments = order.payments ?? []
 
   const setStatus = (status: OrderStatus) => {
     db.saveOrder({ ...order, status })
@@ -77,13 +90,40 @@ export function OrderDetail({ id, presetClientId }: { id: string; presetClientId
   return (
     <div>
       <Card className="detail-block">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div className="order-head">
+          <span className="order-title">{orderTitle(order)}</span>
           <Badge tone={statusTone(order.status)}>{ORDER_STATUS_LABEL[order.status]}</Badge>
-          <span style={{ fontSize: 20, fontWeight: 800 }}>{money(total)}</span>
         </div>
+        <div className="order-total">
+          <span className="order-total-label">Сумма заказа</span>
+          <span className="order-total-value">{money(total)}</span>
+        </div>
+
+        {/* Полоса оплаты: цвет и подпись меняются по мере внесения платежей. */}
+        <div className="pay">
+          <div className="pay-head">
+            <span className={cx('pay-status', `pay-status-${payment.status}`)}>
+              {PAYMENT_STATUS_LABEL[payment.status]}
+            </span>
+            <span className="pay-sum">
+              {money(payment.paid)} из {money(payment.total)}
+            </span>
+          </div>
+          <div className={cx('pay-track', `pay-track-${payment.status}`)}>
+            <div className={cx('pay-fill', `pay-fill-${payment.status}`)} style={{ width: `${payment.percent}%` }} />
+          </div>
+          {payment.remaining > 0 ? (
+            <div className="pay-hint">Осталось оплатить {money(payment.remaining)}</div>
+          ) : (
+            <div className="pay-hint">
+              {payment.status === 'overpaid' ? 'Внесено больше суммы заказа' : 'Заказ оплачен полностью'}
+            </div>
+          )}
+        </div>
+
         <div style={{ marginTop: 12 }}>
-          <DetailRow label="Клиент" value={client?.name ?? 'Без клиента'} />
           <DetailRow label="Дата" value={formatDate(order.date)} />
+          <DetailRow label="Клиент" value={client?.name ?? 'Без клиента'} />
         </div>
       </Card>
 
@@ -105,6 +145,12 @@ export function OrderDetail({ id, presetClientId }: { id: string; presetClientId
             ))}
           </div>
         )}
+        {orderCost(order) > 0 && (
+          <div className="field-hint" style={{ marginTop: 8 }}>
+            Себестоимость {money(orderCost(order))} · прибыль{' '}
+            <b style={{ color: 'var(--success)' }}>{money(orderProfit(order))}</b>
+          </div>
+        )}
         {order.comment && (
           <div style={{ marginTop: 12 }}>
             <div className="detail-label">Комментарий</div>
@@ -112,6 +158,69 @@ export function OrderDetail({ id, presetClientId }: { id: string; presetClientId
           </div>
         )}
       </Card>
+
+      <Card className="detail-block">
+        <div className="section-title" style={{ marginBottom: 8 }}>
+          Оплата
+        </div>
+        <div className="payment-totals">
+          <div>
+            <div className="payment-total-label">Оплачено</div>
+            <div className="payment-total-value">{money(payment.paid)}</div>
+          </div>
+          <div>
+            <div className="payment-total-label">Остаток</div>
+            <div className="payment-total-value">{money(payment.remaining)}</div>
+          </div>
+        </div>
+
+        {payments.length === 0 ? (
+          <div className="payment-empty">
+            Предоплата и последующие платежи появятся здесь
+          </div>
+        ) : (
+          <div>
+            {payments.map((item) => (
+              <div className="payment-row" key={item.id}>
+                <span className="payment-when">{formatShortDate(item.date)}</span>
+                <span className="payment-note">{item.comment || 'Оплата'}</span>
+                <span className="payment-sum">{money(item.amount)}</span>
+                <button
+                  className="icon-btn"
+                  aria-label="Удалить платёж"
+                  onClick={() => {
+                    db.saveOrder(removePayment(order, item.id))
+                    refresh()
+                  }}
+                >
+                  <Icon name="trash" size={16} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <Button
+          className="items-add"
+          variant="secondary"
+          icon="wallet"
+          full
+          onClick={() => setPaymentOpen(true)}
+        >
+          Добавить оплату
+        </Button>
+      </Card>
+
+      {paymentOpen && (
+        <PaymentModal
+          order={order}
+          onClose={() => setPaymentOpen(false)}
+          onSaved={() => {
+            refresh()
+            setPaymentOpen(false)
+          }}
+        />
+      )}
 
       <div className="detail-actions" style={{ flexWrap: 'wrap' }}>
         {order.status !== 'done' && order.status !== 'cancelled' && (
@@ -196,6 +305,93 @@ function DetailRow({ label, value }: { label: string; value: string }) {
   )
 }
 
+// Окно платежа: сумма, комментарий и кнопка «Полностью», которая подставляет
+// остаток — после сохранения заказ сразу помечается как оплаченный.
+function PaymentModal({
+  order,
+  onSaved,
+  onClose,
+}: {
+  order: Order
+  onSaved: () => void
+  onClose: () => void
+}) {
+  const { db } = useData()
+  const state = orderPaymentState(order)
+  const [amount, setAmount] = useState(state.remaining > 0 ? String(state.remaining) : '')
+  const [comment, setComment] = useState('')
+  const [error, setError] = useState('')
+
+  const submit = () => {
+    const value = Number(amount)
+    if (amount.trim() === '' || !Number.isFinite(value) || value <= 0) {
+      setError('Укажите сумму больше нуля')
+      return
+    }
+    db.saveOrder(addPayment(order, value, comment))
+    onSaved()
+  }
+
+  return (
+    <Modal title="Добавить оплату" onClose={onClose}>
+      <div className="form">
+        <div className="payment-totals">
+          <div>
+            <div className="payment-total-label">Сумма заказа</div>
+            <div className="payment-total-value">{money(state.total)}</div>
+          </div>
+          <div>
+            <div className="payment-total-label">Остаток</div>
+            <div className="payment-total-value">{money(state.remaining)}</div>
+          </div>
+        </div>
+
+        {state.remaining > 0 && (
+          <div className="chips" style={{ marginBottom: 0 }}>
+            <button
+              type="button"
+              className="chip"
+              onClick={() => {
+                setAmount(String(state.remaining))
+                if (error) setError('')
+              }}
+            >
+              Полностью · {money(state.remaining)}
+            </button>
+          </div>
+        )}
+
+        <Field label="Сумма, ₽" error={error}>
+          <Input
+            type="number"
+            inputMode="decimal"
+            min="0"
+            step="any"
+            value={amount}
+            onChange={(e) => {
+              setAmount(e.target.value)
+              if (error) setError('')
+            }}
+            autoFocus
+          />
+        </Field>
+        <Field label="Комментарий" hint="Например: предоплата, наличные, перевод">
+          <Input value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Предоплата" />
+        </Field>
+
+        <div className="form-actions">
+          <Button variant="outline" onClick={onClose}>
+            Отмена
+          </Button>
+          <Button variant="primary" icon="check" onClick={submit}>
+            Внести оплату
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
 function OrderForm({
   initial,
   products,
@@ -257,6 +453,9 @@ function OrderForm({
   const removeItem = (index: number) => setItems((prev) => prev.filter((_, i) => i !== index))
 
   const total = items.reduce((sum, it) => sum + it.price * it.qty, 0)
+  const totalCost = items.reduce((sum, it) => sum + (it.cost ?? 0) * it.qty, 0)
+  const itemProfit = (item: OrderItem) => (item.price - (item.cost ?? 0)) * item.qty
+  const itemCost = (item: OrderItem) => (item.cost ?? 0) * item.qty
 
   const submit = () => {
     const clean = items
@@ -280,9 +479,12 @@ function OrderForm({
 
     onSave({
       id: initial.id,
+      number: initial.number,
       clientId: clientId || null,
       date: fromDateInput(date),
       status,
+      // Платежи вводятся в карточке заказа и здесь сохраняются как есть.
+      payments: initial.payments ?? [],
       comment: comment.trim(),
       items: clean,
     })
@@ -365,7 +567,13 @@ function OrderForm({
                         }
                         const product = products.find((p) => p.id === option.id)
                         if (product) {
-                          patchItem(i, { productId: product.id, name: product.name, price: product.price })
+                          // Себестоимость — снимок из каталога: по нему считается прибыль.
+                          patchItem(i, {
+                            productId: product.id,
+                            name: product.name,
+                            price: product.price,
+                            cost: product.cost ?? 0,
+                          })
                         }
                       }}
                     />
@@ -399,9 +607,31 @@ function OrderForm({
                         onChange={(e) => patchItem(i, { qty: toNumber(e.target.value) })}
                       />
                     </Field>
+                    <div style={{ gridColumn: '1 / -1' }}>
+                      <Field
+                        label="Себестоимость, ₽"
+                        hint={marginHint(item.price, item.cost ?? 0)}
+                      >
+                        <Input
+                          type="number"
+                          inputMode="decimal"
+                          min="0"
+                          step="any"
+                          value={item.cost ? String(item.cost) : ''}
+                          onChange={(e) => patchItem(i, { cost: toNumber(e.target.value) })}
+                          placeholder="0"
+                        />
+                      </Field>
+                    </div>
                   </div>
                   <div style={{ textAlign: 'right', color: 'var(--text-muted)', fontSize: 13 }}>
                     Сумма: <b style={{ color: 'var(--text)' }}>{money(lineSum)}</b>
+                    {itemCost(item) > 0 && (
+                      <>
+                        {' · прибыль '}
+                        <b style={{ color: 'var(--success)' }}>{money(itemProfit(item))}</b>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -418,6 +648,12 @@ function OrderForm({
         <span>Итого</span>
         <span className="total-value">{money(total)}</span>
       </div>
+      {totalCost > 0 && (
+        <div className="field-hint" style={{ textAlign: 'right', marginTop: 6 }}>
+          Себестоимость {money(totalCost)} · прибыль{' '}
+          <b style={{ color: 'var(--success)' }}>{money(total - totalCost)}</b>
+        </div>
+      )}
 
       <Field label="Комментарий">
         <Textarea

@@ -7,7 +7,8 @@ import type { Client, Contractor, Order } from '../types'
 import { Capacitor } from '@capacitor/core'
 import { Directory, Filesystem } from '@capacitor/filesystem'
 import { Share } from '@capacitor/share'
-import { formatDate } from '../utils/format'
+import { orderHeading } from '../utils/orders'
+import { orderPaymentState } from '../utils/payments'
 
 // В pdfmake 0.3.x шрифт Roboto (с кириллицей) подключается через виртуальную ФС.
 pdfMake.addVirtualFileSystem(vfs)
@@ -36,7 +37,9 @@ export interface ReceiptInput {
 export async function generateReceiptPdf(input: ReceiptInput): Promise<void> {
   const { order, client, contractor } = input
   const total = order.items.reduce((sum, it) => sum + it.price * it.qty, 0)
-  const number = order.id.slice(0, 8).toUpperCase()
+  // Номер заказа (у старых записей — первые символы идентификатора).
+  const number = order.number ? String(order.number) : order.id.slice(0, 8).toUpperCase()
+  const payment = orderPaymentState(order)
 
   const header: Array<Record<string, unknown>> = []
   if (contractor.name.trim()) {
@@ -77,13 +80,9 @@ export async function generateReceiptPdf(input: ReceiptInput): Promise<void> {
 
   const content: unknown[] = [
     ...header,
-    { text: 'ЧЕК', alignment: 'center', style: 'title', margin: [0, 10, 0, 4] },
-    {
-      columns: [
-        { text: `№ ${number}`, style: 'meta' },
-        { text: formatDate(order.date), alignment: 'right', style: 'meta' },
-      ],
-    },
+    // Номер и дата заказа — в шапке чека: по ним заказ находят в переписке.
+    { text: orderHeading(order), alignment: 'center', style: 'title', margin: [0, 10, 0, 2] },
+    { text: 'ЧЕК', alignment: 'center', style: 'subtitle', margin: [0, 0, 0, 4] },
     ...clientLines.map((line) => ({ ...line, margin: [0, 4, 0, 0], style: 'meta' })),
     {
       canvas: [{ type: 'line', x1: 0, y1: 0, x2: 270, y2: 0, lineWidth: 1, lineColor: '#cccccc' }],
@@ -111,6 +110,27 @@ export async function generateReceiptPdf(input: ReceiptInput): Promise<void> {
       alignment: 'right',
       margin: [0, 10, 0, 0],
     },
+    // Оплата показывается только по заказам, где что-то уже внесено.
+    ...(payment.paid > 0
+      ? [
+          {
+            text: `Оплачено: ${pdfMoney(payment.paid)}`,
+            alignment: 'right',
+            style: 'meta',
+            margin: [0, 2, 0, 0],
+          },
+          ...(payment.remaining > 0
+            ? [
+                {
+                  text: `К оплате: ${pdfMoney(payment.remaining)}`,
+                  alignment: 'right',
+                  style: 'meta',
+                  margin: [0, 1, 0, 0],
+                },
+              ]
+            : []),
+        ]
+      : []),
     { text: 'Спасибо за покупку!', alignment: 'center', style: 'thanks', margin: [0, 14, 0, 0] },
   ]
 
@@ -122,7 +142,8 @@ export async function generateReceiptPdf(input: ReceiptInput): Promise<void> {
     styles: {
       company: { fontSize: 10, bold: true },
       companyProps: { fontSize: 7.5, color: '#555555', margin: [0, 2, 0, 0] },
-      title: { fontSize: 17, bold: true },
+      title: { fontSize: 13, bold: true },
+      subtitle: { fontSize: 9, color: '#666666' },
       meta: { fontSize: 8, color: '#333333' },
       total: { fontSize: 11, bold: true },
       thanks: { fontSize: 8, color: '#666666' },
@@ -142,8 +163,8 @@ export async function generateReceiptPdf(input: ReceiptInput): Promise<void> {
       recursive: true,
     })
     await Share.share({
-      title: `Чек № ${number}`,
-      text: `Чек № ${number}`,
+      title: `Заказ № ${number}`,
+      text: `Заказ № ${number}`,
       files: [file.uri],
     })
     return

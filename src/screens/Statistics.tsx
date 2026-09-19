@@ -91,10 +91,22 @@ export function Statistics() {
 
       <div className="stat-grid">
         <Stat value={money(summary.revenue)} label="Выручка" accent />
-        <Stat value={String(summary.count)} label="Заказов" />
+        <Stat
+          value={money(summary.profit)}
+          label="Прибыль"
+          profit
+          hint="выручка минус себестоимость"
+        />
         <Stat value={money(summary.average)} label="Средний чек" />
+        <Stat value={String(summary.count)} label="Заказов" />
         <Stat value={String(summary.byStatus.done)} label="Завершено" />
       </div>
+
+      {summary.cost > 0 && (
+        <div className="field-hint" style={{ marginTop: 8 }}>
+          Себестоимость проданного: {money(summary.cost)}
+        </div>
+      )}
 
       <div className="section">
         <div className="section-title" style={{ marginBottom: 10 }}>
@@ -136,7 +148,12 @@ export function Statistics() {
                   <span className="top-qty">
                     {entry.qty} {plural(entry.qty, 'шт', 'шт', 'шт')}
                   </span>
-                  <span className="top-total">{money(entry.total)}</span>
+                  <span className="top-total">
+                    {money(entry.total)}
+                    {entry.profit > 0 && entry.profit !== entry.total && (
+                      <span className="top-profit">прибыль +{money(entry.profit)}</span>
+                    )}
+                  </span>
                 </div>
               ))}
             </div>
@@ -174,11 +191,24 @@ function rangeLabel(bounds: DateRange): string {
   return 'Период: за всё время'
 }
 
-function Stat({ value, label, accent }: { value: string; label: string; accent?: boolean }) {
+function Stat({
+  value,
+  label,
+  accent,
+  profit,
+  hint,
+}: {
+  value: string
+  label: string
+  accent?: boolean
+  profit?: boolean
+  hint?: string
+}) {
   return (
     <div className="stat">
-      <div className={accent ? 'stat-value stat-accent' : 'stat-value'}>{value}</div>
+      <div className={cx('stat-value', accent && 'stat-accent', profit && 'stat-profit')}>{value}</div>
       <div className="stat-label">{label}</div>
+      {hint && <div className="stat-hint">{hint}</div>}
     </div>
   )
 }

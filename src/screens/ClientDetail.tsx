@@ -6,9 +6,11 @@ import type { AddressEntry } from '../db/addresses'
 import { useRoute } from '../router'
 import { useData } from '../state/DataContext'
 import { ORDER_STATUS_LABEL, type Client } from '../types'
-import { formatDate, money } from '../utils/format'
+import { formatDate, money, plural } from '../utils/format'
 import { uid } from '../utils/id'
-import { openRoute, openTel } from '../utils/navigation'
+import { openRoute, openTel, openTelegram, openWhatsApp } from '../utils/navigation'
+import { formatOrderNumber } from '../utils/orders'
+import { orderPaymentState } from '../utils/payments'
 import { statusTone } from '../utils/status'
 
 export function ClientDetail({ id }: { id: string }) {
@@ -74,6 +76,23 @@ export function ClientDetail({ id }: { id: string }) {
                   <Icon name="phone" size={16} />
                   Вызов
                 </button>
+                {/* Мессенджеры: приложение только открывает переписку по номеру. */}
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => openTelegram(client.phone)}
+                >
+                  <Icon name="telegram" size={16} />
+                  Telegram
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => openWhatsApp(client.phone)}
+                >
+                  <Icon name="whatsapp" size={16} />
+                  WhatsApp
+                </button>
               </div>
             </div>
           ) : (
@@ -133,20 +152,30 @@ export function ClientDetail({ id }: { id: string }) {
           />
         ) : (
           <div className="list">
-            {orders.map((o) => (
-              <button key={o.id} className="list-item" onClick={() => navigate(`/orders/${o.id}`)}>
-                <span className="list-item-main">
-                  <span className="list-item-title">{formatDate(o.date)}</span>
-                  <span className="list-item-sub">
-                    {o.items.length} позиций · {ORDER_STATUS_LABEL[o.status]}
+            {orders.map((o) => {
+              const payment = orderPaymentState(o)
+              return (
+                <button key={o.id} className="list-item" onClick={() => navigate(`/orders/${o.id}`)}>
+                  <span className="list-item-main">
+                    <span className="list-item-title">
+                      {formatOrderNumber(o) ? `${formatOrderNumber(o)} · ` : ''}
+                      {formatDate(o.date)}
+                    </span>
+                    <span className="list-item-sub">
+                      {o.items.length} {plural(o.items.length, 'позиция', 'позиции', 'позиций')} ·{' '}
+                      {ORDER_STATUS_LABEL[o.status]}
+                      {payment.remaining > 0 && o.status !== 'cancelled'
+                        ? ` · к оплате ${money(payment.remaining)}`
+                        : ''}
+                    </span>
                   </span>
-                </span>
-                <span className="list-item-end">
-                  <span className="list-item-price">{money(db.getOrderTotal(o))}</span>
-                  <Badge tone={statusTone(o.status)}>{ORDER_STATUS_LABEL[o.status]}</Badge>
-                </span>
-              </button>
-            ))}
+                  <span className="list-item-end">
+                    <span className="list-item-price">{money(db.getOrderTotal(o))}</span>
+                    <Badge tone={statusTone(o.status)}>{ORDER_STATUS_LABEL[o.status]}</Badge>
+                  </span>
+                </button>
+              )
+            })}
           </div>
         )}
       </div>

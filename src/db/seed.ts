@@ -29,6 +29,7 @@ export function seedDemo(db: Database): void {
     name: string,
     sku: string,
     price: number,
+    cost: number,
     stock: number,
     minStock: number,
     kind?: Product['kind'],
@@ -37,22 +38,23 @@ export function seedDemo(db: Database): void {
     name,
     sku,
     price,
+    cost,
     stock,
     minStock,
     description: '',
     kind,
   })
 
-  const p1 = product('Кофе в зёрнах 1 кг', 'COF-01', 1200, 14, 5)
-  const p2 = product('Молоко 3,2% 1 л', 'MLK-01', 95, 40, 10)
-  const p3 = product('Круассан', 'BAK-01', 110, 6, 8)
-  const p4 = product('Чай листовой 100 г', 'TEA-01', 350, 25, 10)
-  const p5 = product('Стаканчик бумажный (уп. 50)', 'CUP-01', 250, 3, 5)
-  const p6 = product('Сахар порционный (уп. 100)', 'SUG-01', 90, 12, 5)
+  const p1 = product('Кофе в зёрнах 1 кг', 'COF-01', 1200, 750, 14, 5)
+  const p2 = product('Молоко 3,2% 1 л', 'MLK-01', 95, 62, 40, 10)
+  const p3 = product('Круассан', 'BAK-01', 110, 55, 6, 8)
+  const p4 = product('Чай листовой 100 г', 'TEA-01', 350, 190, 25, 10)
+  const p5 = product('Стаканчик бумажный (уп. 50)', 'CUP-01', 250, 160, 3, 5)
+  const p6 = product('Сахар порционный (уп. 100)', 'SUG-01', 90, 48, 12, 5)
 
   // Услуги не списываются со склада и всегда доступны в заказе.
-  const s1 = product('Выезд мастера', '', 1500, 0, 0, 'service')
-  const s2 = product('Диагностика оборудования', '', 800, 0, 0, 'service')
+  const s1 = product('Выезд мастера', '', 1500, 0, 0, 0, 'service')
+  const s2 = product('Диагностика оборудования', '', 800, 0, 0, 0, 'service')
 
   const order = (
     clientId: string | null,
@@ -65,7 +67,11 @@ export function seedDemo(db: Database): void {
     clientId,
     date: daysAgo(days),
     status,
-    items,
+    items: items.map((item) => {
+      const product = [p1, p2, p3, p4, p5, p6, s1, s2].find((p) => p.id === item.productId)
+      return { ...item, cost: product?.cost ?? 0 }
+    }),
+    payments: [],
     comment,
   })
 
@@ -95,6 +101,13 @@ export function seedDemo(db: Database): void {
       { productId: p1.id, name: p1.name, price: p1.price, qty: 1 },
     ]),
   ]
+
+  // Демонстрация оплат: полная предоплата и частичная оплата.
+  orders[2].payments = [
+    { id: uid(), amount: 5000, date: daysAgo(5), comment: 'Предоплата' },
+    { id: uid(), amount: db.getOrderTotal(orders[2]) - 5000, date: daysAgo(4), comment: 'Доплата' },
+  ]
+  orders[3].payments = [{ id: uid(), amount: 500, date: daysAgo(7), comment: 'Аванс' }]
 
   for (const c of [c1, c2, c3, c4, c5]) db.saveClient(c)
   for (const p of [p1, p2, p3, p4, p5, p6, s1, s2]) db.saveProduct(p)

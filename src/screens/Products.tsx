@@ -1,10 +1,11 @@
 import { useState } from 'react'
+import { StockPanel } from '../components/StockPanel'
 import { Badge, Button, EmptyState, Fab, Field, Input, Modal, Select, Textarea } from '../components/ui'
 import { Icon } from '../components/Icons'
 import { useData } from '../state/DataContext'
 import { useSortValue } from '../state/SortContext'
 import { isService, type Product, type ProductKind } from '../types'
-import { money, plural } from '../utils/format'
+import { marginHint, money, plural } from '../utils/format'
 import { uid } from '../utils/id'
 
 // Варианты сортировки заданы в state/SortContext.tsx — их показывает значок в шапке.
@@ -92,7 +93,23 @@ export function Products() {
           initial={editing === 'new' ? undefined : editing}
           onClose={() => setEditing(null)}
           onSave={(product) => {
-            db.saveProduct(product)
+            const created = editing === 'new'
+            const initialStock = product.stock
+            // У нового товара остаток создаётся движением «Поступление»: так в истории
+            // видно, откуда взялось стартовое число. Остаток существующего товара
+            // меняется только на складе, поэтому здесь берём актуальное значение из базы.
+            const fresh = created ? undefined : db.getProduct(product.id)
+            const saved = db.saveProduct(
+              created ? { ...product, stock: 0 } : { ...product, stock: fresh?.stock ?? product.stock },
+            )
+            if (created && initialStock > 0) {
+              db.applyStockMove({
+                productId: saved.id,
+                kind: 'in',
+                value: initialStock,
+                comment: 'Начальный остаток',
+              })
+            }
             refresh()
             setEditing(null)
           }}
@@ -127,6 +144,7 @@ function ProductForm({
   const [name, setName] = useState(initial?.name ?? '')
   const [sku, setSku] = useState(initial?.sku ?? '')
   const [price, setPrice] = useState(initial ? String(initial.price) : '')
+  const [cost, setCost] = useState(initial?.cost ? String(initial.cost) : '')
   const [stock, setStock] = useState(initial ? String(initial.stock) : '')
   const [minStock, setMinStock] = useState(initial ? String(initial.minStock) : '')
   const [description, setDescription] = useState(initial?.description ?? '')
@@ -144,7 +162,10 @@ function ProductForm({
       name: name.trim(),
       sku: sku.trim(),
       price: toNumber(price),
-      stock: service ? 0 : Math.round(toNumber(stock)),
+      // Себестоимость нужна для расчёта прибыли; у существующего товара остаток
+      // меняется только на складе, поэтому берём его текущее значение.
+      cost: toNumber(cost),
+      stock: service ? 0 : initial ? initial.stock : Math.round(toNumber(stock)),
       minStock: service ? 0 : Math.round(toNumber(minStock)),
       description: description.trim(),
       kind,
@@ -191,18 +212,35 @@ function ProductForm({
               onChange={(e) => setPrice(e.target.value)}
             />
           </Field>
-          {kind === 'product' && (
-            <Field label="На складе">
-              <Input
-                type="number"
-                inputMode="numeric"
-                step="1"
-                value={stock}
-                onChange={(e) => setStock(e.target.value)}
-              />
-            </Field>
-          )}
+          <Field
+            label="Себестоимость, ₽"
+            hint={kind === 'service' ? 'Затраты на услугу, если они есть' : 'Цена закупки одной штуки'}
+          >
+            <Input
+              type="number"
+              inputMode="decimal"
+              min="0"
+              step="any"
+              value={cost}
+              onChange={(e) => setCost(e.target.value)}
+            />
+          </Field>
         </div>
+        <div className="field-hint">{marginHint(toNumber(price), toNumber(cost))}</div>
+        {kind === 'product' && !initial && (
+          <Field
+            label="На складе"
+            hint="Стартовый остаток: в истории товара он появится как «Поступление»"
+          >
+            <Input
+              type="number"
+              inputMode="numeric"
+              step="1"
+              value={stock}
+              onChange={(e) => setStock(e.target.value)}
+            />
+          </Field>
+        )}
         {kind === 'product' && (
           <Field
             label="Минимальный остаток"
@@ -220,6 +258,13 @@ function ProductForm({
         <Field label="Описание">
           <Textarea value={description} onChange={(e) => setDescription(e.target.value)} />
         </Field>
+
+        {initial && kind === 'product' && (
+          <div className="stock-section">
+            <StockPanel productId={initial.id} historyLimit={6} />
+          </div>
+        )}
+
         <div className="form-actions">
           <Button variant="outline" onClick={onClose}>
             Отмена

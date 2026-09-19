@@ -592,6 +592,14 @@ button {
   font-weight: 700;
 }
 
+/* Прибыль по позиции — второй строкой под суммой. */
+.top-profit {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--success);
+}
+
 .list {
   display: flex;
   flex-direction: column;
@@ -740,6 +748,17 @@ button {
 
 .stat-accent {
   color: var(--primary);
+}
+
+.stat-profit {
+  color: var(--success);
+}
+
+.stat-hint {
+  display: block;
+  margin-top: 2px;
+  font-size: 11.5px;
+  color: var(--text-muted);
 }
 
 .section {
@@ -944,6 +963,166 @@ button {
   color: var(--primary);
 }
 
+/* ---- Оплата заказа ---- */
+
+.order-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.order-title {
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.order-total {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.order-total-label {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.order-total-value {
+  font-size: 20px;
+  font-weight: 800;
+}
+
+/* Полоса оплаты: подпись и цвет зависят от того, сколько уже внесено. */
+.pay {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pay-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.pay-status {
+  font-weight: 600;
+}
+
+.pay-status-unpaid {
+  color: var(--text-muted);
+}
+
+.pay-status-partial {
+  color: var(--warning);
+}
+
+.pay-status-paid {
+  color: var(--success);
+}
+
+.pay-status-overpaid {
+  color: var(--primary);
+}
+
+.pay-sum {
+  color: var(--text-muted);
+}
+
+.pay-track {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.pay-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.25s ease;
+}
+
+.pay-fill-unpaid {
+  background: var(--border);
+}
+
+.pay-fill-partial {
+  background: var(--warning);
+}
+
+.pay-fill-paid {
+  background: var(--success);
+}
+
+.pay-fill-overpaid {
+  background: var(--primary);
+}
+
+.pay-hint {
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.payment-totals {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.payment-total-label {
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.payment-total-value {
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.payment-empty {
+  padding: 4px 0 10px;
+  font-size: 13.5px;
+  color: var(--text-muted);
+}
+
+.payment-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+}
+
+.payment-row:last-child {
+  border-bottom: none;
+}
+
+.payment-when {
+  min-width: 42px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.payment-note {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.payment-sum {
+  font-weight: 700;
+}
+
 /* ---- Склад ---- */
 
 .stock-row {
@@ -986,6 +1165,85 @@ button {
 
 .stock-bar-sub {
   font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+/* ---- История движения товара ---- */
+
+.stock-section {
+  border-top: 1px solid var(--border);
+  padding-top: 14px;
+}
+
+.stock-summary {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.stock-summary-qty {
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.stock-summary-label {
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.stock-history {
+  display: flex;
+  flex-direction: column;
+}
+
+.stock-move {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13.5px;
+}
+
+.stock-move:last-child {
+  border-bottom: none;
+}
+
+.stock-move-date {
+  min-width: 42px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.stock-move-delta {
+  min-width: 46px;
+  font-weight: 700;
+}
+
+.stock-move-in {
+  color: var(--success);
+}
+
+.stock-move-out {
+  color: var(--danger);
+}
+
+.stock-move-note {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stock-move-after {
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.stock-history-empty {
+  font-size: 13.5px;
   color: var(--text-muted);
 }
 

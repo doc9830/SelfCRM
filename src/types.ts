@@ -26,6 +26,9 @@ export interface Product {
   // Тип позиции: товар учитывается на складе, услуга — нет.
   // Поле опционально для совместимости с данными, созданными до его появления.
   kind?: ProductKind
+  // Себестоимость единицы (закупочная цена). Нужна для расчёта прибыли.
+  // Поле опционально для совместимости с данными, созданными до его появления.
+  cost?: number
 }
 
 export interface OrderItem {
@@ -33,15 +36,59 @@ export interface OrderItem {
   name: string
   price: number
   qty: number
+  // Себестоимость единицы на момент оформления заказа — снимок, как и цена:
+  // изменение цены закупки в каталоге не переписывает историю.
+  cost?: number
+}
+
+// Оплата по заказу: предоплата и последующие платежи.
+export interface Payment {
+  id: string
+  amount: number
+  date: string
+  comment: string
 }
 
 export interface Order {
   id: string
+  // Сквозной номер заказа. Присваивается при создании и не меняется.
+  // Поле опционально для совместимости со старыми данными (номер присвоит миграция).
+  number?: number
   clientId: string | null
   date: string
   status: OrderStatus
   items: OrderItem[]
+  // Список платежей по заказу; сумма платежей — «оплачено».
+  payments?: Payment[]
   comment: string
+}
+
+// Движение товара по складу: поступление, расход, корректировка и списание по заказу.
+export type StockMoveKind = 'in' | 'out' | 'order' | 'adjustment'
+
+// Ручные операции склада: движение «Заказ» создаётся само при оформлении заказа.
+export type ManualStockMoveKind = Exclude<StockMoveKind, 'order'>
+
+export const MANUAL_STOCK_MOVE_KINDS: ManualStockMoveKind[] = ['in', 'out', 'adjustment']
+
+export const STOCK_MOVE_LABEL: Record<StockMoveKind, string> = {
+  in: 'Поступление',
+  out: 'Расход',
+  adjustment: 'Корректировка',
+  order: 'Заказ',
+}
+
+export interface StockMove {
+  id: string
+  productId: string
+  date: string
+  // Изменение остатка: «+» — приход или возврат, «−» — расход или продажа.
+  delta: number
+  kind: StockMoveKind
+  // Причина движения: «Заказ №42», комментарий пользователя или название операции.
+  note: string
+  // Остаток после операции — по нему видно, из чего сложилось текущее число.
+  stockAfter: number
 }
 
 export interface Contractor {
@@ -67,6 +114,8 @@ export interface DatabaseSnapshot {
   clients: Client[]
   products: Product[]
   orders: Order[]
+  // История движения товара. В старых резервных копиях поля нет — считается пустой.
+  stockMoves?: StockMove[]
   settings: Settings
 }
 

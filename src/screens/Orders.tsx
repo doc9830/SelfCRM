@@ -5,6 +5,7 @@ import { useData } from '../state/DataContext'
 import { useSortValue } from '../state/SortContext'
 import { ORDER_STATUS_LABEL, type OrderStatus } from '../types'
 import { formatDate, money, plural } from '../utils/format'
+import { formatOrderNumber } from '../utils/orders'
 import {
   ORDER_FILTERS,
   ORDER_FILTER_LABEL,
@@ -95,6 +96,7 @@ export function Orders() {
                 <span className="list-item-main">
                   <span className="list-item-title">{client?.name ?? 'Без клиента'}</span>
                   <span className="list-item-sub">
+                    {formatOrderNumber(o) ? `${formatOrderNumber(o)} · ` : ''}
                     {formatDate(o.date)} · {o.items.length}{' '}
                     {plural(o.items.length, 'позиция', 'позиции', 'позиций')}
                   </span>
