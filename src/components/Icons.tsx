@@ -32,6 +32,7 @@ export type IconName =
   | 'whatsapp'
   | 'wallet'
   | 'history'
+  | 'archive'
 
 const stroke = {
   fill: 'none',
@@ -231,6 +232,14 @@ const ICONS: Record<IconName, ReactNode> = {
       <polyline points="1 4 1 10 7 10" />
       <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
       <polyline points="12 7 12 12 15 14" />
+    </>
+  ),
+  // Коробка с крышкой — отправка клиента в архив.
+  archive: (
+    <>
+      <polyline points="21 8 21 21 3 21 3 8" />
+      <rect x="1" y="3" width="22" height="5" />
+      <line x1="10" y1="12" x2="14" y2="12" />
     </>
   ),
 }

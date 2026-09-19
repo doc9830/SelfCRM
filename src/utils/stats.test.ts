@@ -70,7 +70,7 @@ describe('periodRange', () => {
 })
 
 describe('summarizeOrders', () => {
-  it('считает выручку и средний чек без отменённых заказов', () => {
+  it('считает выручку по завершённым, а незавершённые — отдельно', () => {
     const orders = [
       makeOrder({ id: 'o1', status: 'done', items: [{ productId: 'p1', name: 'A', price: 100, qty: 2 }] }),
       makeOrder({ id: 'o2', status: 'new', items: [{ productId: 'p1', name: 'A', price: 50, qty: 2 }] }),
@@ -78,15 +78,33 @@ describe('summarizeOrders', () => {
     ]
     const summary = summarizeOrders(orders)
     expect(summary.count).toBe(3)
-    expect(summary.revenue).toBe(300)
-    expect(summary.average).toBe(150)
+    // Завершённый заказ — выручка, новый — «в работе», отменённый не учитывается нигде.
+    expect(summary.revenue).toBe(200)
+    expect(summary.inWork).toBe(100)
+    expect(summary.average).toBe(200)
     expect(summary.byStatus).toEqual({ new: 1, in_progress: 0, done: 1, cancelled: 1 })
+  })
+
+  it('без завершённых заказов выручка и средний чек нулевые', () => {
+    const orders = [
+      makeOrder({ id: 'o1', status: 'new', items: [{ productId: 'p1', name: 'A', price: 100, qty: 1 }] }),
+      makeOrder({
+        id: 'o2',
+        status: 'in_progress',
+        items: [{ productId: 'p1', name: 'A', price: 700, qty: 1 }],
+      }),
+    ]
+    const summary = summarizeOrders(orders)
+    expect(summary.revenue).toBe(0)
+    expect(summary.average).toBe(0)
+    expect(summary.inWork).toBe(800)
   })
 
   it('на пустом списке возвращает нули', () => {
     const summary = summarizeOrders([])
     expect(summary.count).toBe(0)
     expect(summary.revenue).toBe(0)
+    expect(summary.inWork).toBe(0)
     expect(summary.average).toBe(0)
   })
 })
@@ -129,6 +147,28 @@ describe('группировка выручки', () => {
     expect(product?.total).toBe(500)
     expect(items.find((entry) => entry.key === 's1')?.total).toBe(1500)
     expect(items.find((entry) => entry.key === 'name:Вручную')?.qty).toBe(1)
+  })
+
+  it('не включает незавершённые заказы в топы', () => {
+    const orders = [
+      makeOrder({
+        id: 'o1',
+        status: 'done',
+        clientId: 'c1',
+        items: [{ productId: 'p1', name: 'A', price: 100, qty: 1 }],
+      }),
+      makeOrder({
+        id: 'o2',
+        status: 'new',
+        clientId: 'c2',
+        items: [{ productId: 'p1', name: 'A', price: 500, qty: 4 }],
+      }),
+    ]
+    expect(groupRevenue(orders, (o) => o.clientId).map((entry) => entry.key)).toEqual(['c1'])
+    const items = groupItemRevenue(orders)
+    expect(items).toHaveLength(1)
+    expect(items[0].qty).toBe(1)
+    expect(items[0].total).toBe(100)
   })
 
   it('orderTotal суммирует позиции с учётом количества', () => {

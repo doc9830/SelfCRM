@@ -57,8 +57,12 @@ export function Statistics() {
     // version в зависимостях: пересчитываем статистику после изменений данных.
   }, [db, version, period, from, to])
 
-  const clientName = (id: string) =>
-    id === NO_CLIENT ? 'Без клиента' : db.getClient(id)?.name ?? 'Удалённый клиент'
+  const clientName = (id: string) => {
+    if (id === NO_CLIENT) return 'Без клиента'
+    const client = db.getClient(id)
+    if (!client) return 'Удалённый клиент'
+    return client.archived ? `${client.name} (архив)` : client.name
+  }
 
   return (
     <div>
@@ -90,14 +94,15 @@ export function Statistics() {
       </div>
 
       <div className="stat-grid">
-        <Stat value={money(summary.revenue)} label="Выручка" accent />
+        <Stat value={money(summary.revenue)} label="Выручка" accent hint="завершённые заказы" />
+        <Stat value={money(summary.inWork)} label="В работе" hint="новые и в работе" />
         <Stat
           value={money(summary.profit)}
           label="Прибыль"
           profit
           hint="выручка минус себестоимость"
         />
-        <Stat value={money(summary.average)} label="Средний чек" />
+        <Stat value={money(summary.average)} label="Средний чек" hint="по завершённым" />
         <Stat value={String(summary.count)} label="Заказов" />
         <Stat value={String(summary.byStatus.done)} label="Завершено" />
       </div>
@@ -138,8 +143,9 @@ export function Statistics() {
         <>
           {items.length > 0 && (
             <div className="section">
-              <div className="section-title" style={{ marginBottom: 10 }}>
-                Топ товаров и услуг
+              <div className="section-head">
+                <div className="section-title">Топ товаров и услуг</div>
+                <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>по завершённым</span>
               </div>
               {items.slice(0, 5).map((entry, index) => (
                 <div className="top-row" key={entry.key}>
@@ -161,8 +167,9 @@ export function Statistics() {
 
           {clients.length > 0 && (
             <div className="section">
-              <div className="section-title" style={{ marginBottom: 10 }}>
-                Топ клиентов
+              <div className="section-head">
+                <div className="section-title">Топ клиентов</div>
+                <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>по завершённым</span>
               </div>
               {clients.slice(0, 5).map((entry, index) => (
                 <div className="top-row" key={entry.key}>

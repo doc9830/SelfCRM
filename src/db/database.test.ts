@@ -54,6 +54,43 @@ describe('Database: клиенты и товары', () => {
     expect(db.getProduct('p1')?.stock).toBe(10)
   })
 
+  it('отправляет клиента в архив, сохраняя заказы, остатки и историю склада', () => {
+    const { db } = setup()
+    db.saveClient({ id: 'c1', name: 'Иван', phone: '', email: '', comment: '', createdAt: '' })
+    db.saveProduct(makeProduct({ id: 'p1', stock: 10 }))
+    const order = db.createOrderDraft('c1')
+    order.items = [{ productId: 'p1', name: 'Товар', price: 100, qty: 4 }]
+    db.saveOrder(order)
+
+    db.archiveClient('c1')
+
+    // Из списка клиент пропадает, но заказы, склад и история остаются на месте.
+    expect(db.getClients()).toHaveLength(0)
+    expect(db.getArchivedClients().map((c) => c.id)).toEqual(['c1'])
+    expect(db.getClient('c1')?.archived).toBe(true)
+    expect(db.getOrders()).toHaveLength(1)
+    expect(db.getProduct('p1')?.stock).toBe(6)
+    expect(db.getStockMoves('p1')).toHaveLength(1)
+
+    db.restoreClient('c1')
+
+    expect(db.getClients().map((c) => c.id)).toEqual(['c1'])
+    expect(db.getArchivedClients()).toEqual([])
+    expect(db.getClient('c1')?.archived).toBeUndefined()
+  })
+
+  it('переносит архив клиента в резервную копию', () => {
+    const { db } = setup()
+    db.saveClient({ id: 'c1', name: 'Иван', phone: '', email: '', comment: '', createdAt: '' })
+    db.archiveClient('c1')
+
+    const second = new Database(new MemoryStore())
+    second.importData(db.exportData())
+
+    expect(second.getClients()).toHaveLength(0)
+    expect(second.getArchivedClients()).toHaveLength(1)
+  })
+
   it('удаляет товар и снимает ссылку с позиций заказов, сохраняя снимок', () => {
     const { db } = setup()
     db.saveProduct(makeProduct({ id: 'p1', name: 'Товар', price: 100 }))

@@ -239,8 +239,20 @@ export class Database {
 
   // ----- клиенты -----
 
-  getClients(): Client[] {
-    return this.data.clients.map((c) => this.cloneClient(c)).sort((a, b) => a.name.localeCompare(b.name, 'ru'))
+  /**
+   * Клиенты по алфавиту. По умолчанию архив скрыт: он показывается отдельной вкладкой,
+   * а архивный клиент нельзя выбрать при оформлении нового заказа.
+   */
+  getClients(includeArchived = false): Client[] {
+    return this.data.clients
+      .filter((c) => includeArchived || !c.archived)
+      .map((c) => this.cloneClient(c))
+      .sort((a, b) => a.name.localeCompare(b.name, 'ru'))
+  }
+
+  /** Клиенты в архиве: заказы и история склада остаются в базе, клиент скрыт из списков. */
+  getArchivedClients(): Client[] {
+    return this.getClients(true).filter((c) => c.archived)
   }
 
   getClient(id: string): Client | undefined {
@@ -259,8 +271,28 @@ export class Database {
     return client
   }
 
+  // Архив вместо удаления: заказы, выручка и история склада остаются на месте,
+  // клиент просто исчезает из списков и из выбора при оформлении заказа.
+  archiveClient(id: string): void {
+    const client = this.data.clients.find((c) => c.id === id)
+    if (!client) return
+    client.archived = true
+    client.archivedAt = new Date().toISOString()
+    this.persist()
+  }
+
+  // Возврат из архива: клиент снова доступен в списках и при создании заказа.
+  restoreClient(id: string): void {
+    const client = this.data.clients.find((c) => c.id === id)
+    if (!client) return
+    delete client.archived
+    delete client.archivedAt
+    this.persist()
+  }
+
+  // Окончательное удаление — доступно из архива: каскадно удаляем заказы клиента,
+  // чтобы не оставлять «висячих» ссылок, и возвращаем товары на склад.
   deleteClient(id: string): void {
-    // Каскадно удаляем заказы клиента, чтобы не оставлять «висячих» ссылок.
     for (const order of this.data.orders.filter((o) => o.clientId === id)) {
       this.applyOrderStock(order, null, this.orderRemovalNote(order))
     }

@@ -11,6 +11,12 @@ export interface Client {
   latitude?: number
   longitude?: number
   createdAt: string
+  // Клиент в архиве: скрыт из списка и из выбора при оформлении заказа, но его
+  // заказы, суммы и история склада сохраняются. Поле опционально для совместимости
+  // с данными, созданными до его появления.
+  archived?: boolean
+  // Дата отправки в архив — показывается в карточке архивного клиента.
+  archivedAt?: string
 }
 
 export type ProductKind = 'product' | 'service'

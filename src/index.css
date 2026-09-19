@@ -996,6 +996,67 @@ button {
   font-weight: 800;
 }
 
+/* Переключатель статуса в шапке заказа: активный сегмент красится цветом статуса
+   (классы .badge-blue/.badge-amber/.badge-green/.badge-red задают фон и текст). */
+.status-picker {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.status-picker::-webkit-scrollbar {
+  display: none;
+}
+
+.status-option {
+  flex: 1 0 auto;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.status-option:active {
+  transform: scale(0.97);
+}
+
+.status-option-active {
+  border-color: transparent;
+}
+
+/* Активный сегмент: цвета те же, что у бейджей статуса (.badge-*), но с более высокой
+   специфичностью — иначе базовый .status-option перекрыл бы фон и цвет текста.
+   Цвета берутся из переменных темы, поэтому светлая и тёмная темы работают одинаково. */
+.status-option.status-option-active.badge-blue {
+  background: var(--primary-soft);
+  color: var(--primary-strong);
+}
+
+.status-option.status-option-active.badge-amber {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.status-option.status-option-active.badge-green {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.status-option.status-option-active.badge-red {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
 /* Полоса оплаты: подпись и цвет зависят от того, сколько уже внесено. */
 .pay {
   display: flex;

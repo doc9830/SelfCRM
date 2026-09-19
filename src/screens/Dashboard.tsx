@@ -3,6 +3,7 @@ import { useData } from '../state/DataContext'
 import { isActiveStatus, isService } from '../types'
 import { money, plural } from '../utils/format'
 import { ACTIVE_ORDERS_LINK, statisticsLink } from '../utils/links'
+import { filterOrdersByRange, periodRange, summarizeOrders } from '../utils/stats'
 import { Icon, type IconName } from '../components/Icons'
 
 export function Dashboard() {
@@ -13,9 +14,8 @@ export function Dashboard() {
   const products = db.getProducts()
 
   const activeOrders = orders.filter((o) => isActiveStatus(o.status))
-  const revenue = orders
-    .filter((o) => o.status !== 'cancelled')
-    .reduce((sum, o) => sum + db.getOrderTotal(o), 0)
+  // Выручка — завершённые заказы текущего месяца: на этот же период ведёт плашка.
+  const month = summarizeOrders(filterOrdersByRange(orders, periodRange('month')))
   const lowStock = products.filter((p) => !isService(p) && p.stock <= p.minStock)
 
   return (
@@ -29,8 +29,8 @@ export function Dashboard() {
           onClick={() => navigate(ACTIVE_ORDERS_LINK)}
         />
         <Stat
-          value={money(revenue)}
-          label="Выручка"
+          value={money(month.revenue)}
+          label="Выручка за месяц"
           accent
           onClick={() => navigate(statisticsLink('month'))}
         />

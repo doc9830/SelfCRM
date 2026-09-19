@@ -52,10 +52,19 @@ export function ClientDetail({ id }: { id: string }) {
   return (
     <div>
       <Card className="detail-block">
-        <h2 style={{ margin: '0 0 4px' }}>{client.name}</h2>
+        <div className="order-head" style={{ marginBottom: 4 }}>
+          <h2 style={{ margin: 0 }}>{client.name}</h2>
+          {client.archived && <Badge tone="neutral">В архиве</Badge>}
+        </div>
         <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>
           Клиент с {formatDate(client.createdAt)}
+          {client.archived && client.archivedAt ? ` · в архиве с ${formatDate(client.archivedAt)}` : ''}
         </div>
+        {client.archived && (
+          <div className="field-hint" style={{ marginTop: 6 }}>
+            Заказы и история сохранены. Восстановите клиента, чтобы снова оформлять заказы.
+          </div>
+        )}
         <div style={{ marginTop: 8 }}>
           {client.phone ? (
             <div className="detail-row">
@@ -131,9 +140,23 @@ export function ClientDetail({ id }: { id: string }) {
         <Button variant="secondary" icon="edit" full onClick={() => setEditing(true)}>
           Изменить
         </Button>
-        <Button variant="primary" icon="plus" full onClick={() => navigate(`/orders/new?client=${client.id}`)}>
-          Заказ
-        </Button>
+        {client.archived ? (
+          <Button
+            variant="primary"
+            icon="refresh"
+            full
+            onClick={() => {
+              db.restoreClient(client.id)
+              refresh()
+            }}
+          >
+            Восстановить
+          </Button>
+        ) : (
+          <Button variant="primary" icon="plus" full onClick={() => navigate(`/orders/new?client=${client.id}`)}>
+            Заказ
+          </Button>
+        )}
       </div>
 
       <div className="section">
@@ -180,21 +203,47 @@ export function ClientDetail({ id }: { id: string }) {
         )}
       </div>
 
-      <Button
-        variant="danger"
-        icon="trash"
-        full
-        style={{ marginTop: 20 }}
-        onClick={() => {
-          if (window.confirm('Удалить клиента и все его заказы? Это действие необратимо.')) {
-            db.deleteClient(client.id)
-            refresh()
-            navigate('/clients')
-          }
-        }}
-      >
-        Удалить клиента
-      </Button>
+      {client.archived ? (
+        <Button
+          variant="danger"
+          icon="trash"
+          full
+          style={{ marginTop: 20 }}
+          onClick={() => {
+            const count = orders.length
+            const question =
+              count > 0
+                ? `Удалить клиента и все его заказы (${count})? Действие необратимо, товары вернутся на склад.`
+                : 'Удалить клиента навсегда? Действие необратимо.'
+            if (window.confirm(question)) {
+              db.deleteClient(client.id)
+              refresh()
+              navigate('/clients')
+            }
+          }}
+        >
+          Удалить навсегда
+        </Button>
+      ) : (
+        <Button
+          variant="secondary"
+          icon="archive"
+          full
+          style={{ marginTop: 20 }}
+          onClick={() => {
+            if (
+              window.confirm(
+                'Отправить клиента в архив? Заказы, суммы и история склада сохранятся, а клиент исчезнет из списка и из выбора при создании заказа.',
+              )
+            ) {
+              db.archiveClient(client.id)
+              refresh()
+            }
+          }}
+        >
+          В архив
+        </Button>
+      )}
     </div>
   )
 }

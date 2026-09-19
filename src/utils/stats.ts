@@ -32,8 +32,11 @@ export interface RevenueEntry {
 
 export interface OrderSummary {
   count: number
+  // Выручка — сумма завершённых заказов: работа сдана, деньги заработаны.
   revenue: number
-  // Себестоимость проданного и прибыль (выручка минус себестоимость).
+  // «В работе» — новые заказы и заказы в работе: приняты, но ещё не закрыты.
+  inWork: number
+  // Себестоимость проданного и прибыль (выручка минус себестоимость) — по завершённым.
   cost: number
   profit: number
   average: number
@@ -116,25 +119,32 @@ export function filterOrdersByRange(orders: Order[], bounds: DateRange): Order[]
   return orders.filter((order) => isWithinRange(order.date, bounds))
 }
 
-// Отменённые заказы не попадают в выручку, прибыль, средний чек и топы.
+// Терминология: «выручка» — завершённые заказы, «в работе» — новые и принятые в работу.
+// Отменённые заказы не попадают ни в выручку, ни в прибыль, ни в топы.
 export function summarizeOrders(orders: Order[]): OrderSummary {
   const byStatus: Record<OrderStatus, number> = { new: 0, in_progress: 0, done: 0, cancelled: 0 }
   let revenue = 0
+  let inWork = 0
   let cost = 0
-  let payable = 0
+  let done = 0
   for (const order of orders) {
     byStatus[order.status] += 1
     if (order.status === 'cancelled') continue
+    if (order.status !== 'done') {
+      inWork = round2(inWork + orderTotal(order))
+      continue
+    }
     revenue = round2(revenue + orderTotal(order))
     cost = round2(cost + orderCost(order))
-    payable += 1
+    done += 1
   }
   return {
     count: orders.length,
     revenue,
+    inWork,
     cost,
     profit: round2(revenue - cost),
-    average: payable ? round2(revenue / payable) : 0,
+    average: done ? round2(revenue / done) : 0,
     byStatus,
   }
 }
@@ -145,7 +155,8 @@ export function groupRevenue(
 ): RevenueEntry[] {
   const map = new Map<string, RevenueEntry>()
   for (const order of orders) {
-    if (order.status === 'cancelled') continue
+    // Топы считаются по завершённым заказам — как и выручка.
+    if (order.status !== 'done') continue
     const key = getKey(order)
     if (!key) continue
     const entry = map.get(key) ?? { key, label: key, qty: 0, total: 0, profit: 0 }
@@ -160,7 +171,8 @@ export function groupRevenue(
 export function groupItemRevenue(orders: Order[]): RevenueEntry[] {
   const map = new Map<string, RevenueEntry>()
   for (const order of orders) {
-    if (order.status === 'cancelled') continue
+    // Продажи позиций считаются по завершённым заказам.
+    if (order.status !== 'done') continue
     for (const item of order.items) {
       const key = item.productId ?? `name:${item.name}`
       const entry = map.get(key) ?? { key, label: item.name, qty: 0, total: 0, profit: 0 }

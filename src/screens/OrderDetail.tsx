@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { Badge, Button, Card, EmptyState, Field, Input, Modal, Select, Textarea, cx } from '../components/ui'
+import { Button, Card, EmptyState, Field, Input, Modal, Select, Textarea, cx } from '../components/ui'
 import { Icon } from '../components/Icons'
 import { SuggestField, type SuggestOption } from '../components/SuggestField'
 import { useRoute } from '../router'
@@ -83,6 +83,14 @@ export function OrderDetail({ id, presetClientId }: { id: string; presetClientId
   const payments = order.payments ?? []
 
   const setStatus = (status: OrderStatus) => {
+    if (status === order.status) return
+    // Отмена возвращает товары на склад и убирает заказ из выручки — спрашиваем.
+    if (
+      status === 'cancelled' &&
+      !window.confirm('Отменить заказ? Товары вернутся на склад, заказ выпадет из выручки.')
+    ) {
+      return
+    }
     db.saveOrder({ ...order, status })
     refresh()
   }
@@ -92,7 +100,25 @@ export function OrderDetail({ id, presetClientId }: { id: string; presetClientId
       <Card className="detail-block">
         <div className="order-head">
           <span className="order-title">{orderTitle(order)}</span>
-          <Badge tone={statusTone(order.status)}>{ORDER_STATUS_LABEL[order.status]}</Badge>
+        </div>
+
+        {/* Статус меняется одним тапом: активный сегмент окрашен в цвет статуса. */}
+        <div className="status-picker" role="group" aria-label="Статус заказа">
+          {ORDER_STATUSES.map((status) => (
+            <button
+              key={status}
+              type="button"
+              className={cx(
+                'status-option',
+                order.status === status && 'status-option-active',
+                order.status === status && `badge-${statusTone(status)}`,
+              )}
+              aria-pressed={order.status === status}
+              onClick={() => setStatus(status)}
+            >
+              {ORDER_STATUS_LABEL[status]}
+            </button>
+          ))}
         </div>
         <div className="order-total">
           <span className="order-total-label">Сумма заказа</span>
@@ -221,24 +247,6 @@ export function OrderDetail({ id, presetClientId }: { id: string; presetClientId
           }}
         />
       )}
-
-      <div className="detail-actions" style={{ flexWrap: 'wrap' }}>
-        {order.status !== 'done' && order.status !== 'cancelled' && (
-          <Button variant="primary" icon="check" onClick={() => setStatus('done')}>
-            Завершить
-          </Button>
-        )}
-        {order.status !== 'in_progress' && order.status !== 'done' && (
-          <Button variant="secondary" onClick={() => setStatus('in_progress')}>
-            В работу
-          </Button>
-        )}
-        {order.status !== 'cancelled' && (
-          <Button variant="danger" onClick={() => setStatus('cancelled')}>
-            Отменить
-          </Button>
-        )}
-      </div>
 
       {order.status === 'done' && (
         <div style={{ marginTop: 16 }}>
@@ -417,6 +425,8 @@ function OrderForm({
   // Кнопка «Добавить позицию» стоит под списком — здесь подкручиваем к новому полю.
   const itemsRef = useRef<HTMLDivElement>(null)
 
+  // В подсказках — только активные клиенты: архивного нельзя выбрать для нового
+  // заказа, но если заказ уже оформлен на архивного, показываем его с пометкой.
   const clients = db.getClients()
   const canPickProduct = products.length > 0
 
@@ -425,9 +435,13 @@ function OrderForm({
     label: c.name,
     sub: c.phone || undefined,
   }))
-  const selectedClient = clients.find((c) => c.id === clientId)
+  const selectedClient = clientId ? db.getClient(clientId) : undefined
   const selectedClientOption: SuggestOption | null = selectedClient
-    ? { id: selectedClient.id, label: selectedClient.name, sub: selectedClient.phone || undefined }
+    ? {
+        id: selectedClient.id,
+        label: selectedClient.archived ? `${selectedClient.name} (архив)` : selectedClient.name,
+        sub: selectedClient.phone || undefined,
+      }
     : null
 
   const productOptions: SuggestOption[] = products.map((p) => ({
