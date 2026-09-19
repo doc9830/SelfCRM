@@ -101,7 +101,7 @@ npm run dev        # запуск в браузере
 npm run build      # production-сборка в dist/
 npm test           # тесты
 npm run typecheck  # проверка типов
-npm run bump -- 1.0.9  # поднять версию сразу в package.json, src/version.ts и build.gradle
+npm run bump -- 1.1.0  # поднять версию сразу в package.json, src/version.ts и build.gradle
 ```
 
 Ключ подсказок адресов (Дадата) в исходниках не хранится: положите `VITE_DADATA_TOKEN=...`
