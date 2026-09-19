@@ -1,4 +1,5 @@
 import {
+  useEffect,
   type ButtonHTMLAttributes,
   type InputHTMLAttributes,
   type ReactNode,
@@ -6,6 +7,7 @@ import {
   type TextareaHTMLAttributes,
 } from 'react'
 import { Icon, type IconName } from './Icons'
+import { BACK_EVENT } from '../utils/back'
 
 export function cx(...parts: Array<string | false | null | undefined>): string {
   return parts.filter(Boolean).join(' ')
@@ -123,6 +125,17 @@ export function Modal({
   onClose: () => void
   children: ReactNode
 }) {
+  // Системная кнопка «Назад» на Android закрывает открытое окно и не меняет экран:
+  // обработчик отменяет событие, поэтому навигация по разделам не срабатывает.
+  useEffect(() => {
+    const onBack = (event: Event) => {
+      event.preventDefault()
+      onClose()
+    }
+    document.addEventListener(BACK_EVENT, onBack)
+    return () => document.removeEventListener(BACK_EVENT, onBack)
+  }, [onClose])
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>

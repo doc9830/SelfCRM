@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Icon } from './Icons'
 import { cx } from './ui'
 import { getSortScope, useSort } from '../state/SortContext'
+import { BACK_EVENT } from '../utils/back'
 
 // Значок со стрелочками в шапке: по нажатию раскрывает собственный (не системный)
 // список вариантов сортировки текущего экрана.
@@ -11,7 +12,7 @@ export function SortMenu({ scope }: { scope: string }) {
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
 
-  // Закрытие по нажатию вне меню и по Escape.
+  // Закрытие по нажатию вне меню, по Escape и системной кнопкой «Назад» (Android).
   useEffect(() => {
     if (!open) return
     const onPointerDown = (event: Event) => {
@@ -20,13 +21,20 @@ export function SortMenu({ scope }: { scope: string }) {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setOpen(false)
     }
+    // Кнопка «Назад» сначала закрывает раскрытое меню и не уводит с экрана.
+    const onBack = (event: Event) => {
+      event.preventDefault()
+      setOpen(false)
+    }
     document.addEventListener('mousedown', onPointerDown)
     document.addEventListener('touchstart', onPointerDown)
     document.addEventListener('keydown', onKeyDown)
+    document.addEventListener(BACK_EVENT, onBack)
     return () => {
       document.removeEventListener('mousedown', onPointerDown)
       document.removeEventListener('touchstart', onPointerDown)
       document.removeEventListener('keydown', onKeyDown)
+      document.removeEventListener(BACK_EVENT, onBack)
     }
   }, [open])
 

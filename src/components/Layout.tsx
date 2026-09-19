@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { Icon, type IconName } from './Icons'
 import { SortMenu } from './SortMenu'
 import { useRoute } from '../router'
+import { headerBackTarget } from '../utils/back'
 import { useTheme } from '../state/ThemeContext'
 import { sortScopeForRoute } from '../state/SortContext'
 import { clientsArchiveFromQuery, clientsLink } from '../utils/links'
@@ -15,18 +16,12 @@ const NAV_ITEMS: Array<{ path: string; label: string; icon: IconName }> = [
   { path: '/stock', label: 'Склад', icon: 'warehouse' },
 ]
 
-export function Layout({
-  title,
-  back,
-  children,
-}: {
-  title: string
-  back?: string
-  children: ReactNode
-}) {
+export function Layout({ title, children }: { title: string; children: ReactNode }) {
   const { route, navigate } = useRoute()
   const { theme, toggleTheme } = useTheme()
   const root = route.segments[0] ?? ''
+  // Куда ведёт стрелочка «Назад»: правило одно с системной кнопкой Android (utils/back.ts).
+  const back = headerBackTarget(route)
   // Сортировка доступна только на экранах-списках — там в шапке появляется значок.
   const sortScope = sortScopeForRoute(route.segments)
   // Архив клиентов: значок показывается только на списке (не в карточке клиента)

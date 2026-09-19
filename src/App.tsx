@@ -1,4 +1,5 @@
 import { Layout } from './components/Layout'
+import { SystemBack } from './components/SystemBack'
 import { UpdateToast } from './components/UpdateToast'
 import { useRoute } from './router'
 import { ClientDetail } from './screens/ClientDetail'
@@ -11,12 +12,13 @@ import { Settings } from './screens/Settings'
 import { Statistics } from './screens/Statistics'
 import { Stock } from './screens/Stock'
 import { StockProduct } from './screens/StockProduct'
-import { clientCardBackFromQuery, clientsArchiveFromQuery } from './utils/links'
+import { clientsArchiveFromQuery } from './utils/links'
 
 export function App() {
   return (
     <>
       {renderScreen()}
+      <SystemBack />
       <UpdateToast />
     </>
   )
@@ -38,7 +40,7 @@ function renderScreen() {
     case 'clients':
       if (seg[1]) {
         return (
-          <Layout title="Клиент" back={clientCardBackFromQuery(route.query.get('from'))}>
+          <Layout title="Клиент">
             <ClientDetail id={seg[1]} />
           </Layout>
         )
@@ -52,7 +54,7 @@ function renderScreen() {
     case 'orders':
       if (seg[1]) {
         return (
-          <Layout title={seg[1] === 'new' ? 'Новый заказ' : 'Заказ'} back="/orders">
+          <Layout title={seg[1] === 'new' ? 'Новый заказ' : 'Заказ'}>
             <OrderDetail id={seg[1]} presetClientId={route.query.get('client')} />
           </Layout>
         )
@@ -73,7 +75,7 @@ function renderScreen() {
     case 'stock':
       if (seg[1]) {
         return (
-          <Layout title="Движение товара" back="/stock">
+          <Layout title="Движение товара">
             <StockProduct id={seg[1]} />
           </Layout>
         )
@@ -86,7 +88,7 @@ function renderScreen() {
 
     case 'statistics':
       return (
-        <Layout title="Статистика" back="/">
+        <Layout title="Статистика">
           <Statistics />
         </Layout>
       )

@@ -1682,6 +1682,37 @@ button {
   background: rgba(255, 255, 255, 0.18);
 }
 
+/* ---- Подсказка о выходе (системная кнопка «Назад» на Android) ---- */
+
+.back-hint {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--nav-h) + 20px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  padding: 9px 16px;
+  border-radius: 999px;
+  background: rgba(17, 24, 39, 0.9);
+  color: #fff;
+  font-size: 13px;
+  white-space: nowrap;
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 8px 22px rgba(16, 24, 40, 0.28);
+  z-index: 45;
+  animation: back-hint-in 0.16s ease-out;
+}
+
+@keyframes back-hint-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 8px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
 /* ---- Тёмная тема ---- */
 
 :root[data-theme='dark'] {

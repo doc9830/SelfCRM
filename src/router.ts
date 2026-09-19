@@ -6,7 +6,9 @@ export interface Route {
   query: URLSearchParams
 }
 
-function parse(hash: string): Route {
+// Разбор адреса вынесен в отдельную функцию: по нему решают и экраны, и
+// системная кнопка «Назад» (см. utils/back.ts), поэтому правила парсинга — часть контракта.
+export function parseRoute(hash: string): Route {
   const raw = hash.replace(/^#/, '') || '/'
   const [pathPart, queryPart] = raw.split('?')
   const segments = pathPart.split('/').filter(Boolean)
@@ -15,10 +17,10 @@ function parse(hash: string): Route {
 }
 
 export function useRoute(): { route: Route; navigate: (path: string) => void } {
-  const [route, setRoute] = useState<Route>(() => parse(window.location.hash))
+  const [route, setRoute] = useState<Route>(() => parseRoute(window.location.hash))
 
   useEffect(() => {
-    const onChange = () => setRoute(parse(window.location.hash))
+    const onChange = () => setRoute(parseRoute(window.location.hash))
     window.addEventListener('hashchange', onChange)
     return () => window.removeEventListener('hashchange', onChange)
   }, [])
