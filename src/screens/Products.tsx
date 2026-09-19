@@ -73,6 +73,17 @@ export function Products() {
             refresh()
             setEditing(null)
           }}
+          onDelete={
+            editing === 'new'
+              ? undefined
+              : () => {
+                  if (window.confirm('Удалить товар? Связанные позиции в заказах сохранятся.')) {
+                    db.deleteProduct(editing.id)
+                    refresh()
+                    setEditing(null)
+                  }
+                }
+          }
         />
       )}
     </div>
@@ -83,10 +94,12 @@ function ProductForm({
   initial,
   onSave,
   onClose,
+  onDelete,
 }: {
   initial?: Product
   onSave: (product: Product) => void
   onClose: () => void
+  onDelete?: () => void
 }) {
   const [name, setName] = useState(initial?.name ?? '')
   const [sku, setSku] = useState(initial?.sku ?? '')
@@ -172,6 +185,11 @@ function ProductForm({
             Сохранить
           </Button>
         </div>
+        {onDelete && (
+          <Button variant="danger" icon="trash" full onClick={onDelete}>
+            Удалить товар
+          </Button>
+        )}
       </div>
     </Modal>
   )

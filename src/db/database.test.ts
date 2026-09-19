@@ -52,6 +52,22 @@ describe('Database: клиенты и товары', () => {
     expect(db.getOrders()).toHaveLength(0)
     expect(db.getProduct('p1')?.stock).toBe(10)
   })
+
+  it('удаляет товар и снимает ссылку с позиций заказов, сохраняя снимок', () => {
+    const { db } = setup()
+    db.saveProduct(makeProduct({ id: 'p1', name: 'Товар', price: 100 }))
+    const order = db.createOrderDraft()
+    order.items = [{ productId: 'p1', name: 'Товар', price: 100, qty: 2 }]
+    db.saveOrder(order)
+
+    db.deleteProduct('p1')
+
+    expect(db.getProducts()).toHaveLength(0)
+    const saved = db.getOrder(order.id)
+    expect(saved?.items[0].productId).toBeNull()
+    expect(saved?.items[0].name).toBe('Товар')
+    expect(saved?.items[0].price).toBe(100)
+  })
 })
 
 describe('Database: заказы и суммы', () => {
