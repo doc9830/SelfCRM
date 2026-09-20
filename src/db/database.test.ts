@@ -546,6 +546,108 @@ describe('Database: история движения товара', () => {
   })
 })
 
+describe('Database: массовый приход и списание', () => {
+  it('двигает несколько позиций одной причиной', () => {
+    const { db } = setup()
+    db.saveProduct(makeProduct({ id: 'p1', stock: 5 }))
+    db.saveProduct(makeProduct({ id: 'p2', name: 'Шланг', stock: 10 }))
+
+    expect(
+      db.applyBulkStockMove({
+        kind: 'in',
+        items: [
+          { productId: 'p1', value: 4 },
+          { productId: 'p2', value: 6 },
+        ],
+        comment: 'Накладная №128',
+      }),
+    ).toBe(2)
+
+    expect(db.getProduct('p1')?.stock).toBe(9)
+    expect(db.getProduct('p2')?.stock).toBe(16)
+    // Причина одна на операцию и попадает в историю каждой позиции.
+    expect(db.getStockMoves('p1')[0].kind).toBe('in')
+    expect(db.getStockMoves('p1')[0].note).toBe('Накладная №128')
+    expect(db.getStockMoves('p2')[0].delta).toBe(6)
+    expect(db.getStockMoves('p2')[0].stockAfter).toBe(16)
+  })
+
+  it('списывает несколько позиций одной причиной', () => {
+    const { db } = setup()
+    db.saveProduct(makeProduct({ id: 'p1', stock: 9 }))
+    db.saveProduct(makeProduct({ id: 'p2', name: 'Шланг', stock: 3 }))
+
+    expect(
+      db.applyBulkStockMove({
+        kind: 'out',
+        items: [
+          { productId: 'p1', value: 2 },
+          { productId: 'p2', value: 3 },
+        ],
+        comment: 'Истёк срок годности',
+      }),
+    ).toBe(2)
+
+    expect(db.getProduct('p1')?.stock).toBe(7)
+    expect(db.getProduct('p2')?.stock).toBe(0)
+    const [move] = db.getStockMoves('p1')
+    expect(move.kind).toBe('out')
+    expect(move.delta).toBe(-2)
+    expect(move.note).toBe('Истёк срок годности')
+    expect(move.stockAfter).toBe(7)
+  })
+
+  it('пропускает услуги, нулевые и неизвестные позиции', () => {
+    const { db } = setup()
+    db.saveProduct(makeProduct({ id: 'p1', stock: 10 }))
+    db.saveProduct(makeProduct({ id: 's1', name: 'Выезд мастера', kind: 'service', stock: 0 }))
+
+    expect(
+      db.applyBulkStockMove({
+        kind: 'out',
+        items: [
+          { productId: 's1', value: 3 },
+          { productId: 'p1', value: 0 },
+          { productId: 'нет такого', value: 3 },
+        ],
+      }),
+    ).toBe(0)
+
+    expect(db.getProduct('p1')?.stock).toBe(10)
+    expect(db.getStockMoves()).toEqual([])
+  })
+
+  it('без причины подставляет название операции', () => {
+    const { db } = setup()
+    db.saveProduct(makeProduct({ stock: 10 }))
+
+    expect(db.applyBulkStockMove({ kind: 'in', items: [{ productId: 'p1', value: 2 }] })).toBe(1)
+
+    expect(db.getStockMoves('p1')[0].note).toBe('Поступление')
+  })
+
+  it('сохраняет всю операцию в хранилище', () => {
+    const { db, store } = setup()
+    db.saveProduct(makeProduct({ id: 'p1', stock: 5 }))
+    db.saveProduct(makeProduct({ id: 'p2', name: 'Шланг', stock: 5 }))
+
+    db.applyBulkStockMove({
+      kind: 'in',
+      items: [
+        { productId: 'p1', value: 1 },
+        { productId: 'p2', value: 2 },
+      ],
+      comment: 'Накладная №129',
+    })
+
+    // Новая база читает то же хранилище: остатки и история на месте.
+    const second = new Database(store)
+    expect(second.getProduct('p1')?.stock).toBe(6)
+    expect(second.getProduct('p2')?.stock).toBe(7)
+    expect(second.getStockMoves()).toHaveLength(2)
+  })
+})
+
 describe('Database: напоминания по заказам', () => {
   const dueAt = new Date(2026, 8, 20, 9).toISOString()
   const earlier = new Date(2026, 8, 19, 12).toISOString()

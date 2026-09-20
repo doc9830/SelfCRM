@@ -1,21 +1,37 @@
+import { useState } from 'react'
+import { BulkStockModal } from '../components/BulkStockModal'
 import { Button, EmptyState, cx } from '../components/ui'
 import { Icon } from '../components/Icons'
 import { useRoute } from '../router'
 import { useData } from '../state/DataContext'
-import { isService } from '../types'
+import { isService, type BulkStockMoveKind } from '../types'
 import { plural } from '../utils/format'
 
-// Склад: список товаров с остатками. Тап по строке открывает экран товара
-// (маршрут /stock/<id>) — там движение и изменение остатка.
+// Склад: массовый приход и списание, список товаров с остатками. Тап по строке открывает
+// экран товара (маршрут /stock/<id>) — там движение по одной позиции и вся история.
 export function Stock() {
   const { db } = useData()
   const { navigate } = useRoute()
+  const [bulk, setBulk] = useState<BulkStockMoveKind | null>(null)
 
   const products = db.getProducts().filter((p) => !isService(p))
   const low = products.filter((p) => p.stock <= p.minStock)
 
   return (
     <div>
+      {/* Массовые операции стоят над плашкой низкого остатка: приход новой партии
+          и списание — первые действия на складе. */}
+      {products.length > 0 && (
+        <div className="stock-actions">
+          <Button variant="secondary" icon="arrow-down" onClick={() => setBulk('in')}>
+            Приход
+          </Button>
+          <Button variant="secondary" icon="arrow-up" onClick={() => setBulk('out')}>
+            Списание
+          </Button>
+        </div>
+      )}
+
       {low.length > 0 && (
         <div className="limit-banner limit-banner-danger">
           <span className="limit-banner-icon">
@@ -66,6 +82,8 @@ export function Stock() {
           })}
         </div>
       )}
+
+      {bulk && <BulkStockModal kind={bulk} onClose={() => setBulk(null)} />}
     </div>
   )
 }

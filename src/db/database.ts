@@ -1,4 +1,5 @@
 import type {
+  BulkStockMoveKind,
   Client,
   DatabaseSnapshot,
   ManualStockMoveKind,
@@ -563,6 +564,39 @@ export class Database {
     )
     this.persist()
     return true
+  }
+
+  /**
+   * Массовое движение: приход или списание сразу по нескольким позициям одной причиной.
+   * Причина одна на всю операцию — она попадает в историю каждой позиции («Поступление ·
+   * По накладной №128»), поэтому по складу видно, откуда взялись числа.
+   *
+   * Услуги, неизвестные позиции и нулевые количества пропускаются: они не создают движений.
+   * Возвращает число позиций, у которых остаток изменился (0 — менять нечего).
+   */
+  applyBulkStockMove(input: {
+    kind: BulkStockMoveKind
+    items: Array<{ productId: string; value: number }>
+    comment?: string
+  }): number {
+    const note = (input.comment ?? '').trim() || STOCK_MOVE_LABEL[input.kind]
+    let applied = 0
+
+    for (const item of input.items) {
+      const product = this.data.products.find((p) => p.id === item.productId)
+      if (!product || isService(product)) continue
+
+      const value = Math.round(item.value)
+      if (!value) continue
+
+      this.applyStockDelta(product.id, input.kind === 'in' ? value : -value, input.kind, note)
+      applied += 1
+    }
+
+    // Запись в хранилище одна на всю операцию — как при сохранении заказа, где движений
+    // тоже может быть много: положение на диске меняется один раз.
+    if (applied) this.persist()
+    return applied
   }
 
   // ----- суммы -----

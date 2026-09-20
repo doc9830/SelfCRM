@@ -101,6 +101,17 @@ export type ManualStockMoveKind = Exclude<StockMoveKind, 'order'>
 
 export const MANUAL_STOCK_MOVE_KINDS: ManualStockMoveKind[] = ['in', 'out', 'adjustment']
 
+// Массовая операция: приход или списание сразу по нескольким позициям одной причиной.
+// Корректировка в массовых не участвует — она всегда про одну позицию и её текущий остаток.
+export type BulkStockMoveKind = Extract<ManualStockMoveKind, 'in' | 'out'>
+
+// Подписи массовых операций: на экране склада это «Приход» и «Списание», а в истории
+// позиции то же движение называется по виду («Поступление», «Расход») — см. STOCK_MOVE_LABEL.
+export const BULK_STOCK_MOVE_LABEL: Record<BulkStockMoveKind, string> = {
+  in: 'Приход',
+  out: 'Списание',
+}
+
 export const STOCK_MOVE_LABEL: Record<StockMoveKind, string> = {
   in: 'Поступление',
   out: 'Расход',
