@@ -123,6 +123,16 @@ export function Settings() {
     }
   }
 
+  // Сохранение файла: в браузере начинается скачивание, на Android открывается
+  // системное меню «Поделиться» — оттуда файл сохраняют в «Файлы» или отправляют.
+  const runExport = async (exportFile: () => Promise<void>) => {
+    try {
+      await exportFile()
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : 'Не удалось сохранить файл')
+    }
+  }
+
   const handleAddressImport = async (file: File | undefined) => {
     if (!file) return
     try {
@@ -139,23 +149,23 @@ export function Settings() {
   const corruptedKeys = db.listCorruptedBackups()
   const loadWarning = db.getLoadWarning()
 
-  const handleDownloadCorrupted = () => {
+  const handleDownloadCorrupted = async () => {
     const [key] = corruptedKeys
     const raw = key ? db.readCorruptedBackup(key) : null
     if (!raw) {
       window.alert('Копия повреждённых данных не найдена')
       return
     }
-    downloadJson(raw, `selfcrm-corrupt-${fileStamp()}.json`)
+    await runExport(() => downloadJson(raw, `selfcrm-corrupt-${fileStamp()}.json`))
   }
 
-  const handleDownloadPreImport = () => {
+  const handleDownloadPreImport = async () => {
     const json = db.readPreImportBackup()
     if (!json) {
       window.alert('Копия данных до импорта не найдена')
       return
     }
-    downloadJson(json, `selfcrm-before-import-${fileStamp()}.json`)
+    await runExport(() => downloadJson(json, `selfcrm-before-import-${fileStamp()}.json`))
   }
 
   return (
@@ -178,7 +188,12 @@ export function Settings() {
                 Файл с исходным содержимым хранилища — его можно открыть или прислать для разбора
               </div>
             </div>
-            <Button size="sm" variant="secondary" icon="download" onClick={handleDownloadCorrupted}>
+            <Button
+              size="sm"
+              variant="secondary"
+              icon="download"
+              onClick={() => void handleDownloadCorrupted()}
+            >
               Скачать
             </Button>
           </div>
@@ -238,13 +253,16 @@ export function Settings() {
         <div className="settings-row">
           <div>
             <div className="settings-row-title">Экспорт</div>
-            <div className="settings-row-desc">Скачать все данные в JSON-файл</div>
+            <div className="settings-row-desc">
+              Скачать все данные в JSON-файл. На телефоне откроется меню «Поделиться» —
+              сохраните файл в «Файлы» или отправьте себе
+            </div>
           </div>
           <Button
             size="sm"
             variant="secondary"
             icon="download"
-            onClick={() => downloadBackup(db)}
+            onClick={() => void runExport(() => downloadBackup(db))}
           >
             Скачать
           </Button>
@@ -273,7 +291,12 @@ export function Settings() {
                 Копия состояния базы перед последним импортом или сбросом
               </div>
             </div>
-            <Button size="sm" variant="secondary" icon="download" onClick={handleDownloadPreImport}>
+            <Button
+              size="sm"
+              variant="secondary"
+              icon="download"
+              onClick={() => void handleDownloadPreImport()}
+            >
               Скачать
             </Button>
           </div>
@@ -286,7 +309,12 @@ export function Settings() {
                 Сохранённые копии значений, которые не удалось прочитать: {corruptedKeys.length}
               </div>
             </div>
-            <Button size="sm" variant="secondary" icon="download" onClick={handleDownloadCorrupted}>
+            <Button
+              size="sm"
+              variant="secondary"
+              icon="download"
+              onClick={() => void handleDownloadCorrupted()}
+            >
               Скачать
             </Button>
           </div>

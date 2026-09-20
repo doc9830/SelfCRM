@@ -546,3 +546,152 @@ describe('Database: история движения товара', () => {
   })
 })
 
+describe('Database: напоминания по заказам', () => {
+  const dueAt = new Date(2026, 8, 20, 9).toISOString()
+  const earlier = new Date(2026, 8, 19, 12).toISOString()
+
+  it('хранит напоминание внутри заказа и подставляет текст по виду', () => {
+    const { db } = setup()
+    const order = db.createOrderDraft()
+    db.saveOrder(order)
+
+    const created = db.addReminder(order.id, { kind: 'payment', text: '   ', dueAt })
+    const [reminder] = db.getOrderReminders(order.id)
+
+    expect(created?.text).toBe('Напомнить об оплате')
+    expect(reminder.kind).toBe('payment')
+    expect(reminder.done).toBeUndefined()
+    // Напоминание живёт в самом заказе: отдельной сущности в базе нет.
+    expect(db.getOrder(order.id)?.reminders).toHaveLength(1)
+  })
+
+  it('сохраняет свой текст и отдаёт список по сроку', () => {
+    const { db } = setup()
+    const order = db.createOrderDraft()
+    db.saveOrder(order)
+
+    db.addReminder(order.id, { kind: 'other', text: 'Забрать документы', dueAt })
+    db.addReminder(order.id, { kind: 'call', text: 'Уточнить размеры', dueAt: earlier })
+
+    expect(db.getOrderReminders(order.id).map((r) => r.text)).toEqual([
+      'Уточнить размеры',
+      'Забрать документы',
+    ])
+  })
+
+  it('не добавляет напоминание несуществующему заказу', () => {
+    const { db } = setup()
+    expect(db.addReminder('нет такого', { kind: 'call', text: '', dueAt })).toBeNull()
+  })
+
+  it('отмечает напоминание выполненным и возвращает в активные', () => {
+    const { db } = setup()
+    const order = db.createOrderDraft()
+    db.saveOrder(order)
+    db.addReminder(order.id, { kind: 'call', text: '', dueAt })
+    const reminder = db.getOrderReminders(order.id)[0]
+
+    expect(db.getReminders()).toHaveLength(1)
+
+    db.toggleReminder(order.id, reminder.id)
+    expect(db.getReminders()).toHaveLength(0)
+    expect(db.getOrderReminders(order.id)[0].done).toBe(true)
+    expect(db.getOrderReminders(order.id)[0].doneAt).toBeTruthy()
+
+    db.toggleReminder(order.id, reminder.id)
+    expect(db.getReminders()).toHaveLength(1)
+    expect(db.getOrderReminders(order.id)[0].done).toBe(false)
+    expect(db.getOrderReminders(order.id)[0].doneAt).toBeUndefined()
+  })
+
+  it('собирает активные напоминания по всем заказам, кроме отменённых', () => {
+    const { db } = setup()
+    const first = db.createOrderDraft()
+    const second = db.createOrderDraft()
+    const cancelled = db.createOrderDraft()
+    db.saveOrder(first)
+    db.saveOrder(second)
+    db.saveOrder({ ...cancelled, status: 'cancelled' })
+
+    db.addReminder(first.id, { kind: 'call', text: '', dueAt })
+    db.addReminder(second.id, { kind: 'product', text: '', dueAt: earlier })
+    db.addReminder(cancelled.id, { kind: 'payment', text: '', dueAt })
+
+    const entries = db.getReminders()
+    expect(entries.map((e) => e.order.id)).toEqual([second.id, first.id])
+    expect(entries[0].order.number).toBe(second.number)
+  })
+
+  it('удаляет напоминание и не трогает остальные', () => {
+    const { db } = setup()
+    const order = db.createOrderDraft()
+    db.saveOrder(order)
+    db.addReminder(order.id, { kind: 'call', text: '', dueAt })
+    db.addReminder(order.id, { kind: 'other', text: 'Забрать документы', dueAt: earlier })
+
+    const [first] = db.getOrderReminders(order.id)
+    // Сверху ближайшее по сроку — это «Другое» от 19 числа.
+    expect(first.kind).toBe('other')
+    db.deleteReminder(order.id, first.id)
+
+    expect(db.getOrderReminders(order.id)).toHaveLength(1)
+    expect(db.getOrderReminders(order.id)[0].kind).toBe('call')
+  })
+
+  it('достраивает пустой список напоминаний в старой базе', () => {
+    const store = new MemoryStore()
+    store.setItem(
+      'selfcrm:data',
+      JSON.stringify({
+        version: 1,
+        clients: [],
+        products: [],
+        orders: [
+          {
+            id: 'o1',
+            clientId: null,
+            date: new Date(2026, 8, 10).toISOString(),
+            status: 'new',
+            items: [],
+            comment: '',
+          },
+        ],
+        settings: {},
+      }),
+    )
+
+    const db = new Database(store)
+    expect(db.getOrder('o1')?.reminders).toEqual([])
+    expect(db.getOrderReminders('o1')).toEqual([])
+  })
+
+  it('переносит напоминания в резервную копию', () => {
+    const { db } = setup()
+    const order = db.createOrderDraft()
+    db.saveOrder(order)
+    db.addReminder(order.id, { kind: 'call', text: '', dueAt })
+
+    const second = new Database(new MemoryStore())
+    second.importData(db.exportData())
+
+    expect(second.getOrderReminders(order.id)).toHaveLength(1)
+    expect(second.getReminders()).toHaveLength(1)
+  })
+
+  it('не двигает склад при работе с напоминаниями', () => {
+    const { db } = setup()
+    db.saveProduct(makeProduct({ stock: 10 }))
+    const order = db.createOrderDraft()
+    order.items = [{ productId: 'p1', name: 'Товар', price: 100, qty: 3 }]
+    db.saveOrder(order)
+    expect(db.getProduct('p1')?.stock).toBe(7)
+
+    const reminder = db.addReminder(order.id, { kind: 'product', text: '', dueAt })
+    if (reminder) db.toggleReminder(order.id, reminder.id)
+    if (reminder) db.deleteReminder(order.id, reminder.id)
+
+    expect(db.getProduct('p1')?.stock).toBe(7)
+    expect(db.getStockMoves('p1')).toHaveLength(1)
+  })
+})
+

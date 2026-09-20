@@ -55,6 +55,27 @@ export interface Payment {
   comment: string
 }
 
+// Вид напоминания: от него зависит подсказка текста и иконка.
+export type ReminderKind = 'call' | 'payment' | 'product' | 'other'
+
+export const REMINDER_KINDS: ReminderKind[] = ['call', 'payment', 'product', 'other']
+
+// Напоминание живёт внутри заказа, а главный экран просто собирает ближайшие
+// напоминания из всех заказов: отдельной сущности, которую нужно где-то искать, нет.
+export interface Reminder {
+  id: string
+  kind: ReminderKind
+  // Текст напоминания. Для вида «Другое» его вводит пользователь, для остальных
+  // видов подставляется подсказка по умолчанию — её тоже можно изменить.
+  text: string
+  // Когда напомнить (ISO). Момент в прошлом — просроченное напоминание.
+  dueAt: string
+  createdAt: string
+  // Выполненное напоминание остаётся в карточке заказа, но уходит из активных.
+  done?: boolean
+  doneAt?: string
+}
+
 export interface Order {
   id: string
   // Сквозной номер заказа. Присваивается при создании и не меняется.
@@ -66,6 +87,9 @@ export interface Order {
   items: OrderItem[]
   // Список платежей по заказу; сумма платежей — «оплачено».
   payments?: Payment[]
+  // Напоминания по заказу. Поле опционально для совместимости со старыми данными
+  // (пустой список достроит миграция).
+  reminders?: Reminder[]
   comment: string
 }
 

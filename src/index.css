@@ -836,6 +836,198 @@ button {
   color: var(--primary);
 }
 
+/* ---- Напоминания ---- */
+
+.reminder-panel {
+  padding: 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.reminder-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 6px;
+}
+
+.reminder-panel-head svg {
+  color: var(--primary);
+}
+
+.reminder-group-title {
+  margin-top: 10px;
+  font-size: 12.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+}
+
+/* Сегодняшние напоминания — с красной точкой, как в макете: это первый взгляд. */
+.reminder-group-title-today {
+  color: var(--danger);
+}
+
+.reminder-group-title-today::before,
+.reminder-group-title-overdue::before {
+  content: '';
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--danger);
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+.reminder-item,
+.reminder-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.reminder-item:last-child,
+.reminder-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.reminder-row {
+  padding: 10px 0;
+}
+
+.reminder-check {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: 2px solid var(--border);
+  background: transparent;
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.reminder-check-on {
+  background: var(--success);
+  border-color: var(--success);
+}
+
+.reminder-open {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: none;
+  padding: 0;
+  text-align: left;
+  color: var(--text);
+}
+
+.reminder-open svg {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.reminder-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.reminder-text {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 14.5px;
+  font-weight: 500;
+  word-break: break-word;
+}
+
+.reminder-text svg {
+  flex-shrink: 0;
+  color: var(--primary);
+}
+
+.reminder-when {
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+/* Иконка вида напоминания в карточке заказа. */
+.reminder-kind {
+  display: inline-flex;
+  color: var(--primary);
+}
+
+.reminder-row-done .reminder-text {
+  text-decoration: line-through;
+  color: var(--text-muted);
+}
+
+.reminder-row-done .reminder-kind {
+  color: var(--text-muted);
+}
+
+/* ---- Форма напоминания ---- */
+
+.reminder-kinds {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.reminder-kind-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.reminder-kind-btn svg {
+  color: var(--primary);
+}
+
+.reminder-kind-btn-active {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+  color: var(--primary-strong);
+}
+
+.reminder-kind-btn-active svg {
+  color: var(--primary-strong);
+}
+
+.reminder-datetime {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.reminder-datetime .input {
+  flex: 1;
+}
+
 /* ---- Формы ---- */
 
 .form {

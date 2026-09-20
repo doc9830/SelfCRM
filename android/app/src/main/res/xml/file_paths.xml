@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Наружу (через FileProvider) отдаётся только внутренний кэш приложения:
-     в нём лежат сгенерированный PDF-чек (src/pdf/documents.ts) и скачанный APK
-     обновления (AppInstallerPlugin.java). Доступ к внешнему хранилищу приложению
-     не нужен и намеренно не открывается. -->
+     в нём лежат сгенерированный PDF-чек (src/pdf/documents.ts), файлы резервных
+     копий (src/db/backup.ts) и скачанный APK обновления (AppInstallerPlugin.java).
+     Доступ к внешнему хранилищу приложению не нужен и намеренно не открывается. -->
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
     <cache-path name="selfcrm_cache" path="." />
 </paths>

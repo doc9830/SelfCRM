@@ -5,6 +5,8 @@ import type {
   Order,
   OrderItem,
   Product,
+  Reminder,
+  ReminderKind,
   Settings,
   StockMove,
   StockMoveKind,
@@ -13,6 +15,12 @@ import { STOCK_MOVE_LABEL, emptyContractor, isService } from '../types'
 import { round2 } from '../utils/format'
 import { uid } from '../utils/id'
 import { assignMissingNumbers, formatOrderNumber, nextOrderNumber, orderTitle } from '../utils/orders'
+import {
+  reminderHintText,
+  sortOrderReminders,
+  sortReminders,
+  type ReminderEntry,
+} from '../utils/reminders'
 import { localStorageStore, type KVStore } from './kvstore'
 
 const STORAGE_KEY = 'selfcrm:data'
@@ -94,6 +102,11 @@ export class Database {
     for (const order of this.data.orders) {
       if (!Array.isArray(order.payments)) {
         order.payments = []
+        changed = true
+      }
+      // До появления напоминаний поля в заказе не было — считаем список пустым.
+      if (!Array.isArray(order.reminders)) {
+        order.reminders = []
         changed = true
       }
       for (const item of order.items) {
@@ -234,6 +247,7 @@ export class Database {
       ...o,
       items: o.items.map((it) => ({ ...it })),
       payments: (o.payments ?? []).map((payment) => ({ ...payment })),
+      reminders: (o.reminders ?? []).map((reminder) => ({ ...reminder })),
     }
   }
 
@@ -382,6 +396,81 @@ export class Database {
     if (existing) this.applyOrderStock(existing, null, this.orderRemovalNote(existing))
     this.data.orders = this.data.orders.filter((o) => o.id !== id)
     this.persist()
+  }
+
+  // ----- напоминания по заказам -----
+
+  /** Напоминания заказа: активные сверху по сроку, выполненные — ниже как история. */
+  getOrderReminders(orderId: string): Reminder[] {
+    const order = this.data.orders.find((o) => o.id === orderId)
+    return sortOrderReminders((order?.reminders ?? []).map((reminder) => ({ ...reminder })))
+  }
+
+  /**
+   * Активные напоминания по всем заказам вместе с самими заказами, ближайшие сверху:
+   * из этого списка главный экран собирает свои группы. Отменённые заказы пропускаем —
+   * по ним уже ничего не нужно делать.
+   */
+  getReminders(): ReminderEntry[] {
+    return sortReminders(
+      this.data.orders
+        .filter((order) => order.status !== 'cancelled')
+        .flatMap((order) =>
+          (order.reminders ?? [])
+            .filter((reminder) => !reminder.done)
+            .map((reminder) => ({ order: this.cloneOrder(order), reminder: { ...reminder } })),
+        ),
+    )
+  }
+
+  /**
+   * Добавляет напоминание к заказу. Пустой текст заменяется подсказкой по виду —
+   * кроме «Другого», где текст вводит пользователь (проверяется в окне создания).
+   * Возвращает null, если заказ не найден.
+   */
+  addReminder(orderId: string, input: { kind: ReminderKind; text: string; dueAt: string }): Reminder | null {
+    const order = this.data.orders.find((o) => o.id === orderId)
+    if (!order) return null
+
+    if (!Array.isArray(order.reminders)) order.reminders = []
+    const reminder: Reminder = {
+      id: uid(),
+      kind: input.kind,
+      text: input.text.trim() || reminderHintText(input.kind),
+      dueAt: input.dueAt,
+      createdAt: new Date().toISOString(),
+    }
+    order.reminders.push(reminder)
+    this.persist()
+    return { ...reminder }
+  }
+
+  /** Отмечает напоминание выполненным и обратно (тап по чекбоксу). */
+  toggleReminder(orderId: string, reminderId: string): void {
+    const reminder = this.findReminder(orderId, reminderId)
+    if (!reminder) return
+
+    if (reminder.done) {
+      reminder.done = false
+      delete reminder.doneAt
+    } else {
+      reminder.done = true
+      reminder.doneAt = new Date().toISOString()
+    }
+    this.persist()
+  }
+
+  deleteReminder(orderId: string, reminderId: string): void {
+    const order = this.data.orders.find((o) => o.id === orderId)
+    if (!order || !Array.isArray(order.reminders)) return
+    order.reminders = order.reminders.filter((reminder) => reminder.id !== reminderId)
+    this.persist()
+  }
+
+  private findReminder(orderId: string, reminderId: string): Reminder | undefined {
+    return this.data.orders
+      .find((order) => order.id === orderId)
+      ?.reminders?.find((reminder) => reminder.id === reminderId)
   }
 
   // ----- склад (движение товара) -----

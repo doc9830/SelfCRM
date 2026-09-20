@@ -33,6 +33,7 @@ export type IconName =
   | 'wallet'
   | 'history'
   | 'archive'
+  | 'bell'
 
 const stroke = {
   fill: 'none',
@@ -240,6 +241,13 @@ const ICONS: Record<IconName, ReactNode> = {
       <polyline points="21 8 21 21 3 21 3 8" />
       <rect x="1" y="3" width="22" height="5" />
       <line x1="10" y1="12" x2="14" y2="12" />
+    </>
+  ),
+  // Колокольчик — напоминания по заказу.
+  bell: (
+    <>
+      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+      <path d="M13.73 21a2 2 0 0 1-3.46 0" />
     </>
   ),
 }

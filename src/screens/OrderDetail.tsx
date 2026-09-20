@@ -7,16 +7,30 @@ import { useData } from '../state/DataContext'
 import {
   ORDER_STATUSES,
   ORDER_STATUS_LABEL,
+  REMINDER_KINDS,
   emptyContractor,
   isService,
   type Order,
   type OrderItem,
   type OrderStatus,
   type Product,
+  type ReminderKind,
 } from '../types'
 import { fromDateInput, toDateInput } from '../utils/dates'
 import { formatDate, formatShortDate, marginHint, money } from '../utils/format'
 import { orderHeading, orderTitle } from '../utils/orders'
+import {
+  REMINDER_KIND_HINT,
+  REMINDER_KIND_ICON,
+  REMINDER_KIND_LABEL,
+  defaultReminderDueAt,
+  reminderDueAtFromInputs,
+  reminderHintText,
+  reminderTextError,
+  reminderTextForKind,
+  reminderTime,
+  reminderWhenLabel,
+} from '../utils/reminders'
 import {
   PAYMENT_STATUS_LABEL,
   addPayment,
@@ -38,6 +52,8 @@ export function OrderDetail({ id, presetClientId }: { id: string; presetClientId
   const [pdfError, setPdfError] = useState('')
   // Окно «Добавить оплату» — состояние хука выше ранних выходов (правила хуков).
   const [paymentOpen, setPaymentOpen] = useState(false)
+  // Окно создания напоминания — по тем же причинам тоже до ранних выходов.
+  const [reminderOpen, setReminderOpen] = useState(false)
 
   if (!isNew && !existing) {
     return (
@@ -81,6 +97,7 @@ export function OrderDetail({ id, presetClientId }: { id: string; presetClientId
   const total = db.getOrderTotal(order)
   const payment = orderPaymentState(order)
   const payments = order.payments ?? []
+  const reminders = db.getOrderReminders(order.id)
 
   const setStatus = (status: OrderStatus) => {
     if (status === order.status) return
@@ -248,6 +265,77 @@ export function OrderDetail({ id, presetClientId }: { id: string; presetClientId
         />
       )}
 
+      {/* Напоминания живут внутри заказа: список и кнопка создания — перед чеком. */}
+      <Card className="detail-block">
+        <div className="section-title" style={{ marginBottom: 8 }}>
+          Напоминания
+        </div>
+        {reminders.length === 0 ? (
+          <div className="payment-empty">Напоминаний по заказу нет</div>
+        ) : (
+          <div className="reminder-list">
+            {reminders.map((reminder) => (
+              <div
+                className={cx('reminder-row', reminder.done && 'reminder-row-done')}
+                key={reminder.id}
+              >
+                <button
+                  type="button"
+                  className={cx('reminder-check', reminder.done && 'reminder-check-on')}
+                  aria-pressed={Boolean(reminder.done)}
+                  aria-label={
+                    reminder.done ? 'Вернуть напоминание в активные' : 'Отметить выполненным'
+                  }
+                  onClick={() => {
+                    db.toggleReminder(order.id, reminder.id)
+                    refresh()
+                  }}
+                >
+                  {reminder.done && <Icon name="check" size={14} />}
+                </button>
+                <span className="reminder-kind">
+                  <Icon name={REMINDER_KIND_ICON[reminder.kind]} size={16} />
+                </span>
+                <span className="reminder-main">
+                  <span className="reminder-text">{reminder.text}</span>
+                  <span className="reminder-when">{reminderWhenLabel(reminder.dueAt)}</span>
+                </span>
+                <button
+                  className="icon-btn"
+                  aria-label="Удалить напоминание"
+                  onClick={() => {
+                    db.deleteReminder(order.id, reminder.id)
+                    refresh()
+                  }}
+                >
+                  <Icon name="trash" size={16} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        <Button
+          className="items-add"
+          variant="secondary"
+          icon="bell"
+          full
+          onClick={() => setReminderOpen(true)}
+        >
+          Напомнить
+        </Button>
+      </Card>
+
+      {reminderOpen && (
+        <ReminderModal
+          order={order}
+          onClose={() => setReminderOpen(false)}
+          onSaved={() => {
+            refresh()
+            setReminderOpen(false)
+          }}
+        />
+      )}
+
       {order.status === 'done' && (
         <div style={{ marginTop: 16 }}>
           <Button
@@ -393,6 +481,160 @@ function PaymentModal({
           </Button>
           <Button variant="primary" icon="check" onClick={submit}>
             Внести оплату
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+// Окно напоминания: вид («о чём»), срок (сегодня / завтра / свои дата и время)
+// и текст. Текст подставляется по виду, его можно изменить; для «Другого» он
+// обязателен, потому что подсказки у этого вида нет.
+function ReminderModal({
+  order,
+  onSaved,
+  onClose,
+}: {
+  order: Order
+  onSaved: () => void
+  onClose: () => void
+}) {
+  const { db } = useData()
+  const [kind, setKind] = useState<ReminderKind>('call')
+  const [day, setDay] = useState<'today' | 'tomorrow' | 'custom'>('today')
+  const [customDate, setCustomDate] = useState(() => toDateInput(defaultReminderDueAt('today')))
+  const [customTime, setCustomTime] = useState(() => reminderTime(defaultReminderDueAt('today')))
+  const [text, setText] = useState(() => reminderHintText('call'))
+  const [error, setError] = useState('')
+
+  const pickKind = (next: ReminderKind) => {
+    setKind(next)
+    // Подсказку заменяем, а свой текст пользователя оставляем как есть.
+    setText((current) => reminderTextForKind(next, current))
+    if (error) setError('')
+  }
+
+  const dueAt =
+    day === 'custom' ? reminderDueAtFromInputs(customDate, customTime) : defaultReminderDueAt(day)
+
+  const submit = () => {
+    const textError = reminderTextError(kind, text)
+    if (textError) {
+      setError(textError)
+      return
+    }
+    if (new Date(dueAt).getTime() < Date.now()) {
+      setError('Укажите будущую дату и время')
+      return
+    }
+    db.addReminder(order.id, { kind, text, dueAt })
+    onSaved()
+  }
+
+  return (
+    <Modal title="Напомнить" onClose={onClose}>
+      <div className="form">
+        <div className="field">
+          <span className="field-label">О чём напомнить?</span>
+          <div className="reminder-kinds" role="group" aria-label="О чём напомнить">
+            {REMINDER_KINDS.map((item) => (
+              <button
+                key={item}
+                type="button"
+                className={cx('reminder-kind-btn', item === kind && 'reminder-kind-btn-active')}
+                aria-pressed={item === kind}
+                onClick={() => pickKind(item)}
+              >
+                <Icon name={REMINDER_KIND_ICON[item]} size={16} />
+                {REMINDER_KIND_LABEL[item]}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="field">
+          <span className="field-label">Когда</span>
+          <div className="chips" style={{ marginBottom: 0 }}>
+            <button
+              type="button"
+              className={cx('chip', day === 'today' && 'chip-active')}
+              aria-pressed={day === 'today'}
+              onClick={() => {
+                setDay('today')
+                if (error) setError('')
+              }}
+            >
+              Сегодня
+            </button>
+            <button
+              type="button"
+              className={cx('chip', day === 'tomorrow' && 'chip-active')}
+              aria-pressed={day === 'tomorrow'}
+              onClick={() => {
+                setDay('tomorrow')
+                if (error) setError('')
+              }}
+            >
+              Завтра
+            </button>
+            <button
+              type="button"
+              className={cx('chip', day === 'custom' && 'chip-active')}
+              aria-pressed={day === 'custom'}
+              onClick={() => {
+                setDay('custom')
+                if (error) setError('')
+              }}
+            >
+              Выбрать дату и время
+            </button>
+          </div>
+          {day === 'custom' ? (
+            <div className="reminder-datetime">
+              <Input
+                type="date"
+                value={customDate}
+                onChange={(e) => {
+                  setCustomDate(e.target.value)
+                  if (error) setError('')
+                }}
+              />
+              <Input
+                type="time"
+                value={customTime}
+                onChange={(e) => {
+                  setCustomTime(e.target.value)
+                  if (error) setError('')
+                }}
+              />
+            </div>
+          ) : (
+            <span className="field-hint">{reminderWhenLabel(dueAt)}</span>
+          )}
+        </div>
+
+        <Field
+          label="Комментарий"
+          error={error}
+          hint={kind === 'other' ? 'Для «Другого» текст обязателен' : 'Текст можно изменить'}
+        >
+          <Input
+            value={text}
+            onChange={(e) => {
+              setText(e.target.value)
+              if (error) setError('')
+            }}
+            placeholder={REMINDER_KIND_HINT[kind] || 'О чём напомнить'}
+          />
+        </Field>
+
+        <div className="form-actions">
+          <Button variant="outline" onClick={onClose}>
+            Отмена
+          </Button>
+          <Button variant="primary" icon="bell" onClick={submit}>
+            Создать
           </Button>
         </div>
       </div>

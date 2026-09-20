@@ -109,6 +109,40 @@ export function seedDemo(db: Database): void {
   ]
   orders[3].payments = [{ id: uid(), amount: 500, date: daysAgo(7), comment: 'Аванс' }]
 
+  // Демонстрация напоминаний: сроки считаются от текущей даты, поэтому на главном
+  // экране сразу видны группы «Сегодня» и «Завтра».
+  const tomorrow = new Date()
+  tomorrow.setDate(tomorrow.getDate() + 1)
+  tomorrow.setHours(9, 0, 0, 0)
+
+  orders[0].reminders = [
+    {
+      id: uid(),
+      kind: 'call',
+      text: 'Позвонить клиенту',
+      dueAt: new Date(new Date().setHours(new Date().getHours() + 1, 0, 0, 0)).toISOString(),
+      createdAt: new Date().toISOString(),
+    },
+  ]
+  orders[1].reminders = [
+    {
+      id: uid(),
+      kind: 'product',
+      text: 'Проверить наличие/получение товара',
+      dueAt: tomorrow.toISOString(),
+      createdAt: new Date().toISOString(),
+    },
+  ]
+  orders[5].reminders = [
+    {
+      id: uid(),
+      kind: 'payment',
+      text: 'Напомнить об оплате',
+      dueAt: tomorrow.toISOString(),
+      createdAt: new Date().toISOString(),
+    },
+  ]
+
   for (const c of [c1, c2, c3, c4, c5]) db.saveClient(c)
   for (const p of [p1, p2, p3, p4, p5, p6, s1, s2]) db.saveProduct(p)
   for (const o of orders) db.saveOrder(o)

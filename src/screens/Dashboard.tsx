@@ -1,13 +1,21 @@
 import { useRoute } from '../router'
 import { useData } from '../state/DataContext'
-import { isActiveStatus, isService } from '../types'
+import { isActiveStatus, isService, type Order } from '../types'
+import { cx } from '../components/ui'
 import { money, plural } from '../utils/format'
 import { ACTIVE_ORDERS_LINK, statisticsLink } from '../utils/links'
+import { orderTitle } from '../utils/orders'
+import {
+  REMINDER_KIND_ICON,
+  groupReminders,
+  limitReminderGroups,
+  reminderTime,
+} from '../utils/reminders'
 import { filterOrdersByRange, periodRange, summarizeOrders } from '../utils/stats'
 import { Icon, type IconName } from '../components/Icons'
 
 export function Dashboard() {
-  const { db } = useData()
+  const { db, refresh } = useData()
   const { navigate } = useRoute()
 
   const orders = db.getOrders()
@@ -18,8 +26,70 @@ export function Dashboard() {
   const month = summarizeOrders(filterOrdersByRange(orders, periodRange('month')))
   const lowStock = products.filter((p) => !isService(p) && p.stock <= p.minStock)
 
+  // Ближайшие напоминания из всех заказов: на главной это компактный обзор, сами
+  // напоминания живут в карточках заказов — отдельного планировщика нет.
+  const reminders = limitReminderGroups(groupReminders(db.getReminders()))
+
+  // Подпись строки: по какому заказу и кому напомнить.
+  const reminderMeta = (order: Order): string => {
+    const client = order.clientId ? db.getClient(order.clientId)?.name : undefined
+    return [orderTitle(order), client].filter(Boolean).join(' · ')
+  }
+
   return (
     <div>
+      {reminders.groups.length > 0 && (
+        <div className="reminder-panel">
+          <div className="reminder-panel-head">
+            <Icon name="bell" size={17} />
+            Напоминания
+          </div>
+          {reminders.groups.map((group) => (
+            <div className="reminder-group" key={group.key}>
+              <div className={cx('reminder-group-title', `reminder-group-title-${group.key}`)}>
+                {group.label}
+              </div>
+              {group.items.map(({ order, reminder }) => (
+                <div className="reminder-item" key={`${order.id}-${reminder.id}`}>
+                  <button
+                    type="button"
+                    className="reminder-check"
+                    aria-label="Отметить выполненным"
+                    onClick={() => {
+                      db.toggleReminder(order.id, reminder.id)
+                      refresh()
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="reminder-open"
+                    onClick={() => navigate(`/orders/${order.id}`)}
+                  >
+                    <span className="reminder-main">
+                      <span className="reminder-text">
+                        <Icon name={REMINDER_KIND_ICON[reminder.kind]} size={15} />
+                        {reminder.text}
+                      </span>
+                      <span className="reminder-when">
+                        {reminderMeta(order)} · {reminderTime(reminder.dueAt)}
+                      </span>
+                    </span>
+                    <Icon name="chevron-right" size={16} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          ))}
+          {reminders.hidden > 0 && (
+            <div className="field-hint" style={{ marginTop: 6 }}>
+              Ещё {reminders.hidden}{' '}
+              {plural(reminders.hidden, 'напоминание', 'напоминания', 'напоминаний')} — в карточках
+              заказов
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Плашки кликабельны: активные заказы открывают список новых и «в работе»,
           выручка — статистику с периодом «Месяц». */}
       <div className="stat-grid">
