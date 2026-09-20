@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Публикация изменений из GitHub Release в Telegram-канал SelfCRM.
+// Публикация изменений из GitHub Release в Telegram (канал или группа) SelfCRM.
 //
 // Источником правды считается сам релиз: tag_name (версия), name (заголовок),
 // body (changelog) и assets (APK, обложка). История коммитов и diff не разбираются.
@@ -35,7 +35,7 @@ const DEFAULTS = {
   maxCaption: 1024, // лимит Telegram на подпись к изображению
 }
 
-const USAGE = `Скрипт публикации GitHub Release в Telegram-канал SelfCRM.
+const USAGE = `Скрипт публикации GitHub Release в Telegram-канал или группу SelfCRM.
 
 Аргументы:
   --dry-run                 сформировать и напечатать сообщение, но не отправлять
@@ -977,13 +977,13 @@ async function main() {
   }
   try {
     const chat = await tgJson('getChat', { chat_id: secrets.channel }, secrets.token)
-    info(`Канал           : ${chat.title ?? chat.username ?? maskChannel(secrets.channel)} (${chat.type})`)
+    info(`Чат             : ${chat.title ?? chat.username ?? maskChannel(secrets.channel)} (${chat.type})`)
   } catch (error) {
     error.fatal = true
     error.exitCode = 2
     error.hint =
-      'проверьте секрет TELEGRAM_CHANNEL_ID (@username канала или -100… для приватного) ' +
-      'и права бота: канал → Администраторы → «Публикация сообщений»'
+      'проверьте секрет TELEGRAM_CHANNEL_ID (@username канала или группы, -100… для приватного) ' +
+      'и права бота: канал или группа → Администраторы → «Публикация сообщений»'
     throw error
   }
   info(`Бот             : @${me.username ?? '—'} (id ${me.id})`)
