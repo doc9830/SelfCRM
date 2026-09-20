@@ -177,6 +177,10 @@ chmod 600 .env.local
 4. Готовый файл: `android/app/build/outputs/apk/release/app-release.apk`.
 5. Создайте релиз на GitHub с тегом `v<версия>` (например `v1.0.6`), приложите APK и опишите
    изменения — приложение показывает это описание при проверке обновлений.
+6. Обновите лендинг ([SelfCRMlanding](https://github.com/doc9830/SelfCRMlanding)): в
+   `index.html` — номер версии и ссылку на APK (meta, JSON-LD, кнопка, шаг 01), описание новых
+   возможностей и свежие скриншоты, затем `og-cover.png`. Порядок съёмки и сборки обложки
+   описан в README репозитория лендинга.
 
 > Переменные окружения для терминала: `ANDROID_HOME`/`ANDROID_SDK_ROOT` — путь к Android SDK,
 > `JAVA_HOME` — путь к JDK 21. Сборка release на JDK 17 завершается ошибкой.
