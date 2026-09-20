@@ -455,7 +455,7 @@ export function Settings() {
       <Card>
         <div className="settings-row-title">SelfCRM</div>
         <div className="settings-row-desc" style={{ marginTop: 4 }}>
-          Версия {APP_VERSION} · Один пользователь · Данные хранятся локально на устройстве
+          Версия {APP_VERSION} · Личная CRM · Данные хранятся локально на устройстве
         </div>
       </Card>
 
