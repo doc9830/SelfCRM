@@ -142,8 +142,10 @@ npm run bump -- 1.3.1  # поднять версию сразу в package.json,
 Подробности — в [ARCHITECTURE.md](./ARCHITECTURE.md).
 
 Опубликованный GitHub Release автоматически уходит в Telegram-канал SelfCRM: номер версии,
-changelog из описания релиза, обложка и кнопка скачивания APK. Настройка секретов, формат
-описания релиза, обложки и диагностика — в [docs/TELEGRAM_RELEASES.md](./docs/TELEGRAM_RELEASES.md).
+changelog из описания релиза, обложка и кнопка скачивания APK. Описание релиза пишется коротко —
+так, чтобы пост читался **одним сообщением** (до 3 секций и 5 пунктов, проверка в dry-run перед
+публикацией). Настройка секретов, формат описания релиза, обложки, правило одного поста и
+диагностика — в [docs/TELEGRAM_RELEASES.md](./docs/TELEGRAM_RELEASES.md).
 
 Сборка APK под Android описана в [ANDROID.md](./ANDROID.md), архитектура — в
 [ARCHITECTURE.md](./ARCHITECTURE.md).

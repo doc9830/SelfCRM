@@ -1,0 +1,14 @@
+{
+  "tag_name": "v1.3.2",
+  "name": "SelfCRM 1.3.2 — цифровая клавиатура и маски ввода",
+  "html_url": "https://github.com/doc9830/SelfCRM/releases/tag/v1.3.2",
+  "prerelease": false,
+  "body": "## ✨ Что нового\n\n- ⌨️ Телефон вводится с цифровой клавиатуры\n- 🧮 Количества — только цифры, цены — цифры и точка\n- ✅ Настройки проверяют длину ИНН, ОГРН и КПП\n\n## 🔧 Исправлено\n\n- Исправлена обрезка фамилии в карточке клиента\n\n## 📋 Прочее\n\n- APK: `SelfCRM-1.3.2.apk`, versionCode 21. Тесты: 174.\n",
+  "assets": [
+    {
+      "name": "SelfCRM-1.3.2.apk",
+      "size": 4271791,
+      "browser_download_url": "https://github.com/doc9830/SelfCRM/releases/download/v1.3.2/SelfCRM-1.3.2.apk"
+    }
+  ]
+}
