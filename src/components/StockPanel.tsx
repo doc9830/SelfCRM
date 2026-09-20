@@ -8,7 +8,7 @@ import {
 } from '../types'
 import { formatShortDate, plural } from '../utils/format'
 import { formatStockDelta, stockMoveTitle, stockMoveTone } from '../utils/stock'
-import { Button, Field, Input, cx } from './ui'
+import { Button, Field, Input, IntegerInput, cx } from './ui'
 
 // Учёт остатка: приход, расход, корректировка и вся история движения товара.
 // Блок живёт только на экране товара в разделе «Склад» (маршрут /stock/<id>):
@@ -85,14 +85,10 @@ export function StockPanel({ productId }: { productId: string }) {
 
       <div className="item-card-row">
         <Field label={kind === 'adjustment' ? 'Новый остаток, шт' : 'Количество, шт'}>
-          <Input
-            type="number"
-            inputMode="numeric"
-            step="1"
-            min="0"
+          <IntegerInput
             value={value}
-            onChange={(e) => {
-              setValue(e.target.value)
+            onChange={(next) => {
+              setValue(next)
               if (error) setError('')
             }}
             placeholder={kind === 'adjustment' ? String(product.stock) : '0'}

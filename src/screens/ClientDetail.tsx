@@ -1,13 +1,14 @@
 import { useState } from 'react'
 import { AddressField } from '../components/AddressField'
 import { Icon } from '../components/Icons'
-import { Badge, Button, Card, EmptyState, Field, Input, Textarea } from '../components/ui'
+import { Badge, Button, Card, EmptyState, Field, Input, PhoneInput, Textarea } from '../components/ui'
 import type { AddressEntry } from '../db/addresses'
 import { useRoute } from '../router'
 import { useData } from '../state/DataContext'
 import { ORDER_STATUS_LABEL, type Client } from '../types'
 import { formatDate, money, plural } from '../utils/format'
 import { uid } from '../utils/id'
+import { isPhoneValid } from '../utils/input'
 import { openRoute, openTel, openTelegram, openWhatsApp } from '../utils/navigation'
 import { formatOrderNumber } from '../utils/orders'
 import { orderPaymentState } from '../utils/payments'
@@ -283,12 +284,20 @@ function ClientForm({
       : null,
   )
   const [error, setError] = useState('')
+  const [phoneError, setPhoneError] = useState('')
 
   const submit = () => {
     if (!name.trim()) {
       setError('Укажите имя клиента')
       return
     }
+    // Пустой телефон допустим, но недобранный номер сохранять нельзя:
+    // по нему открывается звонок и мессенджеры.
+    if (!isPhoneValid(phone)) {
+      setPhoneError('В номере должно быть 10 или 11 цифр')
+      return
+    }
+    setPhoneError('')
     const hasCoords = addressEntry && (addressEntry.lat !== 0 || addressEntry.lng !== 0)
     onSave({
       id: initial?.id ?? uid(),
@@ -317,8 +326,15 @@ function ClientForm({
           autoFocus
         />
       </Field>
-      <Field label="Телефон">
-        <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+7 900 000-00-00" />
+      <Field label="Телефон" error={phoneError} hint="Только цифры и оформление: +7 900 000-00-00">
+        <PhoneInput
+          value={phone}
+          onChange={(value) => {
+            setPhone(value)
+            if (phoneError) setPhoneError('')
+          }}
+          placeholder="+7 900 000-00-00"
+        />
       </Field>
       <Field label="Email">
         <Input

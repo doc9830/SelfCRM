@@ -2,12 +2,14 @@ import {
   useEffect,
   type ButtonHTMLAttributes,
   type InputHTMLAttributes,
+  type KeyboardEvent,
   type ReactNode,
   type SelectHTMLAttributes,
   type TextareaHTMLAttributes,
 } from 'react'
 import { Icon, type IconName } from './Icons'
 import { BACK_EVENT } from '../utils/back'
+import { INT_MAX_DIGITS, sanitizeInteger, sanitizeMoney, sanitizePhone } from '../utils/input'
 
 export function cx(...parts: Array<string | false | null | undefined>): string {
   return parts.filter(Boolean).join(' ')
@@ -78,6 +80,98 @@ export function Select({ className, children, ...rest }: SelectHTMLAttributes<HT
       {children}
     </select>
   )
+}
+
+// ----- Поля с масками и цифровой клавиатурой -----
+//
+// type="text" + inputMode: на Android открывается цифровая клавиатура, а сам
+// ввод фильтрует маска из utils/input.ts — буквы, минусы и лишние разделители
+// в состояние формы не попадают. У type="number" браузеры по-разному отдают
+// промежуточные значения («12,», «-»), поэтому маски живут на строковых полях.
+
+type MaskedInputProps = {
+  value: string
+  onChange: (value: string) => void
+  mask: (value: string) => string
+  type?: 'text' | 'tel'
+  inputMode?: InputHTMLAttributes<HTMLInputElement>['inputMode']
+} & Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange' | 'type' | 'inputMode'>
+
+function MaskedInput({ value, onChange, mask, className, ...rest }: MaskedInputProps) {
+  return (
+    <input
+      className={cx('input', className)}
+      value={value}
+      onChange={(e) => {
+        const next = mask(e.target.value)
+        // Маска могла убрать символ, который браузер уже успел показать, при
+        // этом состояние не изменилось — React не тронет поле, правим вручную.
+        if (e.target.value !== next) e.target.value = next
+        onChange(next)
+      }}
+      {...rest}
+    />
+  )
+}
+
+// Телефон: цифровая клавиатура, «+» только в начале, не больше 11 цифр.
+export function PhoneInput({ value, onChange, ...rest }: Omit<MaskedInputProps, 'mask' | 'type' | 'inputMode'>) {
+  return (
+    <MaskedInput
+      value={value}
+      onChange={onChange}
+      mask={sanitizePhone}
+      type="tel"
+      inputMode="tel"
+      autoComplete="tel"
+      {...rest}
+    />
+  )
+}
+
+// Целые числа: количество, остаток, ИНН, ОГРН, КПП.
+export function IntegerInput({
+  maxDigits = INT_MAX_DIGITS,
+  value,
+  onChange,
+  ...rest
+}: Omit<MaskedInputProps, 'mask' | 'type' | 'inputMode'> & { maxDigits?: number }) {
+  return (
+    <MaskedInput
+      value={value}
+      onChange={onChange}
+      mask={(input) => sanitizeInteger(input, maxDigits)}
+      type="text"
+      inputMode="numeric"
+      pattern="[0-9]*"
+      autoComplete="off"
+      {...rest}
+    />
+  )
+}
+
+// Деньги: цифры и один разделитель дробной части (запятая тоже принимается).
+export function MoneyInput({ value, onChange, ...rest }: Omit<MaskedInputProps, 'mask' | 'type' | 'inputMode'>) {
+  return (
+    <MaskedInput
+      value={value}
+      onChange={onChange}
+      mask={sanitizeMoney}
+      type="text"
+      inputMode="decimal"
+      autoComplete="off"
+      {...rest}
+    />
+  )
+}
+
+// Поля позиций заказа остаются type="number" (в них уже цифровая клавиатура),
+// но «-», «+» и «e» там лишние: отрицательная цена и экспонента ломают суммы.
+export function blockNonNumericKeys(event: KeyboardEvent<HTMLInputElement>) {
+  if (event.ctrlKey || event.metaKey || event.altKey) return
+  if (event.key === '-' || event.key === '+' || event.key === 'e' || event.key === 'E') {
+    event.preventDefault()
+  }
 }
 
 // ----- Бейдж статуса -----

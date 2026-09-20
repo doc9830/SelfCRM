@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { Button, Card, EmptyState, Field, Input, Modal, Select, Textarea, cx } from '../components/ui'
+import { Button, Card, EmptyState, Field, Input, Modal, MoneyInput, Select, Textarea, blockNonNumericKeys, cx } from '../components/ui'
 import { Icon } from '../components/Icons'
 import { SuggestField, type SuggestOption } from '../components/SuggestField'
 import { useRoute } from '../router'
@@ -458,14 +458,10 @@ function PaymentModal({
         )}
 
         <Field label="Сумма, ₽" error={error}>
-          <Input
-            type="number"
-            inputMode="decimal"
-            min="0"
-            step="any"
+          <MoneyInput
             value={amount}
-            onChange={(e) => {
-              setAmount(e.target.value)
+            onChange={(next) => {
+              setAmount(next)
               if (error) setError('')
             }}
             autoFocus
@@ -731,6 +727,11 @@ function OrderForm({
         setError('Укажите количество больше нуля')
         return
       }
+      // Цена и себестоимость — деньги: минус здесь только опечатка.
+      if (it.price < 0 || (it.cost ?? 0) < 0) {
+        setError('Цена и себестоимость не могут быть отрицательными')
+        return
+      }
     }
 
     onSave({
@@ -850,7 +851,8 @@ function OrderForm({
                         min="0"
                         step="any"
                         value={item.price ? String(item.price) : ''}
-                        onChange={(e) => patchItem(i, { price: toNumber(e.target.value) })}
+                        onChange={(e) => patchItem(i, { price: nonNegative(e.target.value) })}
+                        onKeyDown={blockNonNumericKeys}
                       />
                     </Field>
                     <Field label="Кол-во">
@@ -861,6 +863,7 @@ function OrderForm({
                         step="1"
                         value={item.qty ? String(item.qty) : ''}
                         onChange={(e) => patchItem(i, { qty: toNumber(e.target.value) })}
+                        onKeyDown={blockNonNumericKeys}
                       />
                     </Field>
                     <div style={{ gridColumn: '1 / -1' }}>
@@ -874,7 +877,8 @@ function OrderForm({
                           min="0"
                           step="any"
                           value={item.cost ? String(item.cost) : ''}
-                          onChange={(e) => patchItem(i, { cost: toNumber(e.target.value) })}
+                          onChange={(e) => patchItem(i, { cost: nonNegative(e.target.value) })}
+                          onKeyDown={blockNonNumericKeys}
                           placeholder="0"
                         />
                       </Field>
@@ -940,6 +944,12 @@ function OrderForm({
 function toNumber(value: string): number {
   const n = Number(value)
   return Number.isFinite(n) ? n : 0
+}
+
+// Цена, себестоимость и количество — неотрицательные: поле остаётся
+// type="number" (в нём цифровая клавиатура), а минус отсекаем на вводе.
+function nonNegative(value: string): number {
+  return Math.max(0, toNumber(value))
 }
 
 

@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, type ChangeEvent } from 'react'
-import { Button, Card, Field, Input, cx } from '../components/ui'
+import { useEffect, useRef, useState } from 'react'
+import { Button, Card, Field, Input, IntegerInput, PhoneInput, cx } from '../components/ui'
 import { Icon } from '../components/Icons'
 import { downloadBackup, downloadJson, readBackupFile } from '../db/backup'
 import { parseAddresses, saveAddresses } from '../db/addresses'
@@ -7,6 +7,7 @@ import { seedDemo } from '../db/seed'
 import { useData } from '../state/DataContext'
 import { useTheme } from '../state/ThemeContext'
 import { emptyContractor, type Contractor } from '../types'
+import { INN_LENGTHS, KPP_LENGTHS, OGRN_LENGTHS, hasValidDigitLength, isPhoneValid } from '../utils/input'
 import { Capacitor } from '@capacitor/core'
 import { downloadUpdate, fetchLatestRelease, installUpdate, isNewerVersion, openExternal, type ReleaseInfo } from '../updates'
 import { useRoute } from '../router'
@@ -486,14 +487,36 @@ function ContractorForm() {
   const { db, refresh } = useData()
   const contractor = db.getSettings().contractor ?? emptyContractor()
   const [form, setForm] = useState<Contractor>(contractor)
+  const [errors, setErrors] = useState<Partial<Record<keyof Contractor, string>>>({})
   const [saved, setSaved] = useState(false)
 
-  const setField =
-    (key: keyof Contractor) =>
-    (e: ChangeEvent<HTMLInputElement>) =>
-      setForm((prev) => ({ ...prev, [key]: e.target.value }))
+  // Поля с масками отдают уже готовую строку, поэтому обработчик общий:
+  // заодно снимает ошибку с поля, в которое снова начали вводить.
+  const setField = (key: keyof Contractor) => (value: string) => {
+    setForm((prev) => ({ ...prev, [key]: value }))
+    setErrors((prev) => {
+      if (!prev[key]) return prev
+      const next = { ...prev }
+      delete next[key]
+      return next
+    })
+  }
+
+  // Реквизиты попадают в чек PDF, поэтому проверяем их длину: пустое значение
+  // допустимо, неполное — нет. Телефон проверяется отдельно: если он введён,
+  // по нему должны работать звонок и мессенджеры.
+  const validate = (): boolean => {
+    const found: Partial<Record<keyof Contractor, string>> = {}
+    if (!isPhoneValid(form.phone)) found.phone = 'В номере должно быть 10 или 11 цифр'
+    if (!hasValidDigitLength(form.inn, INN_LENGTHS)) found.inn = 'ИНН — 10 или 12 цифр'
+    if (!hasValidDigitLength(form.ogrn, OGRN_LENGTHS)) found.ogrn = 'ОГРН — 13 или 15 цифр'
+    if (!hasValidDigitLength(form.kpp, KPP_LENGTHS)) found.kpp = 'КПП — 9 цифр'
+    setErrors(found)
+    return Object.keys(found).length === 0
+  }
 
   const save = () => {
+    if (!validate()) return
     db.updateSettings({
       contractor: {
         name: form.name.trim(),
@@ -513,27 +536,50 @@ function ContractorForm() {
   return (
     <div className="form">
       <Field label="Название / ФИО">
-        <Input value={form.name} onChange={setField('name')} placeholder="ИП Иванов Иван Иванович" />
+        <Input
+          value={form.name}
+          onChange={(e) => setField('name')(e.target.value)}
+          placeholder="ИП Иванов Иван Иванович"
+        />
       </Field>
       <div className="item-card-row">
-        <Field label="ИНН">
-          <Input value={form.inn} onChange={setField('inn')} inputMode="numeric" placeholder="770000000000" />
+        <Field label="ИНН" error={errors.inn} hint="10 или 12 цифр">
+          <IntegerInput
+            maxDigits={12}
+            value={form.inn}
+            onChange={setField('inn')}
+            placeholder="770000000000"
+          />
         </Field>
-        <Field label="ОГРН">
-          <Input value={form.ogrn} onChange={setField('ogrn')} inputMode="numeric" placeholder="1234567890123" />
+        <Field label="ОГРН" error={errors.ogrn} hint="13 или 15 цифр">
+          <IntegerInput
+            maxDigits={15}
+            value={form.ogrn}
+            onChange={setField('ogrn')}
+            placeholder="1234567890123"
+          />
         </Field>
       </div>
-      <Field label="КПП">
-        <Input value={form.kpp} onChange={setField('kpp')} inputMode="numeric" placeholder="770001001" />
+      <Field label="КПП" error={errors.kpp} hint="9 цифр">
+        <IntegerInput maxDigits={9} value={form.kpp} onChange={setField('kpp')} placeholder="770001001" />
       </Field>
-      <Field label="Телефон">
-        <Input value={form.phone} onChange={setField('phone')} placeholder="+7 900 000-00-00" />
+      <Field label="Телефон" error={errors.phone} hint="Только цифры и оформление: +7 900 000-00-00">
+        <PhoneInput value={form.phone} onChange={setField('phone')} placeholder="+7 900 000-00-00" />
       </Field>
       <Field label="Email">
-        <Input value={form.email} onChange={setField('email')} type="email" placeholder="mail@example.com" />
+        <Input
+          value={form.email}
+          onChange={(e) => setField('email')(e.target.value)}
+          type="email"
+          placeholder="mail@example.com"
+        />
       </Field>
       <Field label="Адрес">
-        <Input value={form.address} onChange={setField('address')} placeholder="г. Москва, ул. Примерная, д. 1" />
+        <Input
+          value={form.address}
+          onChange={(e) => setField('address')(e.target.value)}
+          placeholder="г. Москва, ул. Примерная, д. 1"
+        />
       </Field>
       <div className="form-actions">
         <Button variant="primary" icon="check" onClick={save}>

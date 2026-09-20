@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Badge, Button, EmptyState, Fab, Field, Input, Modal, Select, Textarea } from '../components/ui'
+import { Badge, Button, EmptyState, Fab, Field, Input, IntegerInput, Modal, MoneyInput, Select, Textarea } from '../components/ui'
 import { Icon } from '../components/Icons'
 import { useData } from '../state/DataContext'
 import { useSortValue } from '../state/SortContext'
@@ -202,27 +202,13 @@ function ProductForm({
         </Field>
         <div className="item-card-row">
           <Field label="Цена, ₽">
-            <Input
-              type="number"
-              inputMode="decimal"
-              min="0"
-              step="any"
-              value={price}
-              onChange={(e) => setPrice(e.target.value)}
-            />
+            <MoneyInput value={price} onChange={setPrice} />
           </Field>
           <Field
             label="Себестоимость, ₽"
             hint={kind === 'service' ? 'Затраты на услугу, если они есть' : 'Цена закупки одной штуки'}
           >
-            <Input
-              type="number"
-              inputMode="decimal"
-              min="0"
-              step="any"
-              value={cost}
-              onChange={(e) => setCost(e.target.value)}
-            />
+            <MoneyInput value={cost} onChange={setCost} />
           </Field>
         </div>
         <div className="field-hint">{marginHint(toNumber(price), toNumber(cost))}</div>
@@ -231,13 +217,7 @@ function ProductForm({
             label="На складе"
             hint="Стартовый остаток: в разделе «Склад» он появится как «Поступление»"
           >
-            <Input
-              type="number"
-              inputMode="numeric"
-              step="1"
-              value={stock}
-              onChange={(e) => setStock(e.target.value)}
-            />
+            <IntegerInput value={stock} onChange={setStock} />
           </Field>
         )}
         {kind === 'product' && (
@@ -245,13 +225,7 @@ function ProductForm({
             label="Минимальный остаток"
             hint="При достижении остатка приложение покажет предупреждение"
           >
-            <Input
-              type="number"
-              inputMode="numeric"
-              step="1"
-              value={minStock}
-              onChange={(e) => setMinStock(e.target.value)}
-            />
+            <IntegerInput value={minStock} onChange={setMinStock} />
           </Field>
         )}
         <Field label="Описание">
