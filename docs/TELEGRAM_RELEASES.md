@@ -140,10 +140,22 @@ Actions → **Telegram Release** → **Run workflow**:
      `.apk` (в постах так и были `SelfCRM-1.3.1.apk`);
    * **Set as a pre-release** — можно поставить, пост всё равно выйдет (в заголовке
      появится метка тестирования).
-4. **Проверьте, как текст читается в Telegram**: `node scripts/telegram-release.mjs --dry-run
-   --tag v1.4.0` (или Actions → **Telegram Release** → **Run workflow** → `dry_run = true`).
+4. **Проверьте, как текст читается в Telegram.** Пока релиз в черновике, проверять нужно
+   **файлом**, а не тегом: у черновика нет тега, и `/releases/tags/<тег>` на него отвечает 404.
+   Сохраните JSON черновика (id виден в ответе API или в сохранённом `release-id.txt`) и
+   прогоните dry-run по файлу:
+
+   ```bash
+   curl -s -H "Authorization: token <токен>" \
+     "https://api.github.com/repos/doc9830/SelfCRM/releases/<id черновика>" > /tmp/release-<версия>.json
+   node scripts/telegram-release.mjs --dry-run --release-file /tmp/release-<версия>.json
+   ```
+
    В выводе должно быть `Сообщений: 1` и подпись ≤ 1024 без «…» — чек-лист в разделе
    «Правило одного поста». Длинное описание сократите здесь же, до публикации релиза.
+   Вариант «Actions → **Telegram Release** → **Run workflow** → `dry_run = true`» берёт
+   **опубликованный** релиз, поэтому до публикации им проверяют шаблон или готовый файл из
+   примера (`--release-file scripts/fixtures/…`).
 5. Нажмите **Publish release**. Пока релиз в черновике (draft), пост не выходит: событие
    `published` наступает ровно в момент публикации, когда APK уже приложен.
 6. Пост появится в канале или группе через несколько секунд. Ход публикации виден в
