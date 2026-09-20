@@ -1,0 +1,102 @@
+name: Telegram Release
+
+# Имя запуска видно в списке Actions. По нему scripts/telegram-release.mjs понимает,
+# публиковался ли уже этот тег, и не отправляет пост второй раз при ретрае.
+run-name: Telegram release ${{ github.event.release.tag_name || inputs.tag || 'latest' }}
+
+on:
+  # Единственный автоматический триггер: публикация GitHub Release.
+  # Черновики (draft) события не создают, поэтому пост появляется ровно в момент
+  # нажатия «Publish release», вместе с приложенным APK.
+  release:
+    types: [published]
+
+  # Ручной запуск: проверка на текущем релизе (dry_run) или осознанная перепубликация.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Тег релиза (пусто — последний опубликованный релиз)'
+        required: false
+        default: ''
+      dry_run:
+        description: 'Только сформировать сообщение и показать его в логе, ничего не отправлять'
+        type: boolean
+        default: false
+
+# Задаём минимальные права явно: всё остальное по умолчанию запрещено.
+permissions:
+  contents: read # чтение данных релиза и обложек из release-assets/
+  actions: read # защита от повторной публикации (список прежних запусков)
+
+# Два запуска по одному тегу не пересекаются: второй встанет в очередь, а не
+# отправит второй пост. Отменять уже начатую публикацию нельзя.
+concurrency:
+  group: telegram-release-${{ github.event.release.tag_name || inputs.tag || 'latest' }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # Проверяем секреты до любой отправки, чтобы ошибка была понятной и не
+      # оставляла «половину» поста в канале. В режиме dry_run секреты не нужны:
+      # сообщение только печатается в логе. Сравниваем строки (inputs.dry_run
+      # подставляется как true/false), чтобы условие не зависело от типов в
+      # выражениях GitHub.
+      - name: Проверка секретов
+        shell: bash
+        env:
+          DRY_RUN: ${{ inputs.dry_run }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}
+        run: |
+          if [ "${DRY_RUN}" = "true" ]; then
+            echo "Режим dry_run: секреты не требуются, сообщение только печатается в логе."
+            exit 0
+          fi
+          missing=0
+          if [ -z "${TELEGRAM_BOT_TOKEN}" ]; then
+            echo "::error::Не задан секрет TELEGRAM_BOT_TOKEN (Settings → Secrets and variables → Actions → New repository secret)"
+            missing=1
+          fi
+          if [ -z "${TELEGRAM_CHANNEL_ID}" ]; then
+            echo "::error::Не задан секрет TELEGRAM_CHANNEL_ID (например @selfcrmreleases или -1001234567890)"
+            missing=1
+          fi
+          if [ "$missing" -ne 0 ]; then
+            echo "Публикация невозможна: добавьте секреты и запустите workflow заново (dry_run=false)."
+            echo "Подробности: docs/TELEGRAM_RELEASES.md"
+            exit 1
+          fi
+          echo "Секреты заданы: bot token — есть, channel id — есть."
+
+      # Вся логика в одном скрипте без зависимостей (npm ci не нужен: работают
+      # встроенные fetch, FormData и Blob Node.js 20).
+      - name: Публикация в Telegram
+        shell: bash
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          GH_RUN_ID: ${{ github.run_id }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            set -- --tag "${{ inputs.tag }}"
+          else
+            set -- --event-file "${GITHUB_EVENT_PATH}"
+          fi
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            set -- "$@" --dry-run
+            echo "::notice::Режим dry_run: сообщение будет только напечатано в логе."
+          fi
+          node scripts/telegram-release.mjs "$@"

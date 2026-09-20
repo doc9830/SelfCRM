@@ -1,0 +1,14 @@
+{
+  "tag_name": "v1.4.0",
+  "name": "SelfCRM 1.4.0 — повторить заказ и поиск клиентов",
+  "html_url": "https://github.com/doc9830/SelfCRM/releases/tag/v1.4.0",
+  "prerelease": false,
+  "body": "## ✨ Что нового\n\n- 🔁 Повторить заказ из карточки клиента\n- 📦 Улучшена работа с товарами\n- 🔎 Улучшен поиск клиентов\n\n## 🔧 Исправлено\n\n- Исправлена загрузка обновлений\n- Исправлены мелкие ошибки интерфейса",
+  "assets": [
+    {
+      "name": "app-release.apk",
+      "size": 4200000,
+      "browser_download_url": "https://example.com/app-release.apk"
+    }
+  ]
+}

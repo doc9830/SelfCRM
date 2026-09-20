@@ -141,5 +141,9 @@ npm run bump -- 1.3.1  # поднять версию сразу в package.json,
 в файл `.env.local` перед `npm run build`, иначе подсказки работают только по локальной базе.
 Подробности — в [ARCHITECTURE.md](./ARCHITECTURE.md).
 
+Опубликованный GitHub Release автоматически уходит в Telegram-канал SelfCRM: номер версии,
+changelog из описания релиза, обложка и кнопка скачивания APK. Настройка секретов, формат
+описания релиза, обложки и диагностика — в [docs/TELEGRAM_RELEASES.md](./docs/TELEGRAM_RELEASES.md).
+
 Сборка APK под Android описана в [ANDROID.md](./ANDROID.md), архитектура — в
 [ARCHITECTURE.md](./ARCHITECTURE.md).
