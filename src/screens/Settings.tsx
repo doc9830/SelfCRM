@@ -172,10 +172,7 @@ export function Settings() {
     <div>
       {loadWarning && (
         <Card className="settings-group">
-          <div
-            className="limit-banner"
-            style={{ background: 'var(--danger-soft)', color: 'var(--danger)', marginBottom: 0 }}
-          >
+          <div className="limit-banner limit-banner-danger" style={{ marginBottom: 0 }}>
             <span className="limit-banner-icon">
               <Icon name="alert" size={18} />
             </span>

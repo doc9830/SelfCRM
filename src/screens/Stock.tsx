@@ -17,7 +17,7 @@ export function Stock() {
   return (
     <div>
       {low.length > 0 && (
-        <div className="limit-banner" style={{ background: 'var(--danger-soft)', color: 'var(--danger)' }}>
+        <div className="limit-banner limit-banner-danger">
           <span className="limit-banner-icon">
             <Icon name="warehouse" size={18} />
           </span>

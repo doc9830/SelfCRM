@@ -448,6 +448,13 @@ button {
   font-size: 13.5px;
 }
 
+/* Красный вариант плашки (низкий остаток, повреждённые данные). Цвет задаётся
+   классом, а не инлайн-стилем: иначе его не смогла бы переопределить тёмная тема. */
+.limit-banner-danger {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
 /* ---- Списки ---- */
 
 .toolbar {
@@ -1950,6 +1957,12 @@ button {
 :root[data-theme='dark'] .limit-banner,
 :root[data-theme='dark'] .warn-item {
   color: #fde68a;
+}
+
+/* По --danger (#f87171) на тёмно-красном фоне текст читался бы хуже нормы,
+   поэтому в тёмной теме берём светлый оттенок того же цвета. */
+:root[data-theme='dark'] .limit-banner-danger {
+  color: #fecaca;
 }
 
 :root[data-theme='dark'] .switch-track {
