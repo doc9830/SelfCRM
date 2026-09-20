@@ -37,7 +37,24 @@ export function Dashboard() {
   }
 
   return (
-    <div>
+    <div className="dash">
+      {/* Плашки кликабельны: активные заказы открывают список новых и «в работе»,
+          выручка — статистику с периодом «Месяц». */}
+      <div className="stat-grid">
+        <Stat
+          value={String(activeOrders.length)}
+          label="Активные заказы"
+          onClick={() => navigate(ACTIVE_ORDERS_LINK)}
+        />
+        <Stat
+          value={money(month.revenue)}
+          label="Выручка за месяц"
+          accent
+          onClick={() => navigate(statisticsLink('month'))}
+        />
+      </div>
+
+      {/* Напоминания идут под плашками: цифры читаются первыми, а список может быть длинным. */}
       {reminders.groups.length > 0 && (
         <div className="reminder-panel">
           <div className="reminder-panel-head">
@@ -81,7 +98,7 @@ export function Dashboard() {
             </div>
           ))}
           {reminders.hidden > 0 && (
-            <div className="field-hint" style={{ marginTop: 6 }}>
+            <div className="field-hint reminder-more">
               Ещё {reminders.hidden}{' '}
               {plural(reminders.hidden, 'напоминание', 'напоминания', 'напоминаний')} — в карточках
               заказов
@@ -89,22 +106,6 @@ export function Dashboard() {
           )}
         </div>
       )}
-
-      {/* Плашки кликабельны: активные заказы открывают список новых и «в работе»,
-          выручка — статистику с периодом «Месяц». */}
-      <div className="stat-grid">
-        <Stat
-          value={String(activeOrders.length)}
-          label="Активные заказы"
-          onClick={() => navigate(ACTIVE_ORDERS_LINK)}
-        />
-        <Stat
-          value={money(month.revenue)}
-          label="Выручка за месяц"
-          accent
-          onClick={() => navigate(statisticsLink('month'))}
-        />
-      </div>
 
       <div className="section">
         <div className="section-title" style={{ marginBottom: 10 }}>

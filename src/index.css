@@ -703,6 +703,13 @@ button {
 
 /* ---- Dashboard ---- */
 
+/* Блоки главного экрана — плашки, напоминания, разделы — разделяются одинаковым
+   отступом; без него напоминания вплотную прилипали к плашкам и это выглядело
+   как одна слипшаяся карточка. */
+.dash > * + * {
+  margin-top: 20px;
+}
+
 .stat-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -852,7 +859,7 @@ button {
   gap: 7px;
   font-weight: 700;
   font-size: 16px;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
 
 .reminder-panel-head svg {
@@ -860,7 +867,7 @@ button {
 }
 
 .reminder-group-title {
-  margin-top: 10px;
+  margin-top: 12px;
   font-size: 12.5px;
   font-weight: 700;
   text-transform: uppercase;
@@ -966,6 +973,11 @@ button {
 .reminder-when {
   font-size: 12.5px;
   color: var(--text-muted);
+}
+
+/* Подпись «Ещё N напоминаний…» под списком на главной. */
+.reminder-more {
+  margin-top: 8px;
 }
 
 /* Иконка вида напоминания в карточке заказа. */
