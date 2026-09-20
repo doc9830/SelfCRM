@@ -12,7 +12,7 @@ import { Settings } from './screens/Settings'
 import { Statistics } from './screens/Statistics'
 import { Stock } from './screens/Stock'
 import { StockProduct } from './screens/StockProduct'
-import { clientsArchiveFromQuery } from './utils/links'
+import { clientsArchiveFromQuery, repeatOrderFromQuery } from './utils/links'
 
 export function App() {
   return (
@@ -53,9 +53,19 @@ function renderScreen() {
 
     case 'orders':
       if (seg[1]) {
+        // «Повторить заказ» открывает ту же форму нового заказа, но с позициями образца.
+        const repeatFrom = repeatOrderFromQuery(route.query.get('repeat'))
         return (
-          <Layout title={seg[1] === 'new' ? 'Новый заказ' : 'Заказ'}>
-            <OrderDetail id={seg[1]} presetClientId={route.query.get('client')} />
+          <Layout title={seg[1] === 'new' ? (repeatFrom ? 'Повторить заказ' : 'Новый заказ') : 'Заказ'}>
+            <OrderDetail
+              // Ключ по адресу: при переходе в другой заказ или в форму нового заказа
+              // экран монтируется заново и не тянет состояние прошлого заказа
+              // (например, открытый режим правки).
+              key={`${seg[1]}:${repeatFrom ?? ''}`}
+              id={seg[1]}
+              presetClientId={route.query.get('client')}
+              presetRepeatFrom={repeatFrom}
+            />
           </Layout>
         )
       }

@@ -73,3 +73,16 @@ export function clientCardBackFromQuery(value: string | null): string {
   const normalized = (value ?? '').trim().toLowerCase()
   return normalized === CLIENTS_FROM_ARCHIVE ? CLIENTS_ARCHIVE_LINK : '/clients'
 }
+
+// «Повторить заказ»: форма нового заказа, заранее заполненная по образцу
+// завершённого или отменённого заказа. Как и `?client=`, образец живёт в адресе —
+// так ссылку можно открыть заново, а кнопка «Назад» ведёт к старому заказу.
+export function repeatOrderLink(orderId: string): string {
+  return `/orders/new?repeat=${orderId}`
+}
+
+// Значение параметра repeat из адреса. Пустая строка и пробелы — «не повтор».
+export function repeatOrderFromQuery(value: string | null): string | null {
+  const id = (value ?? '').trim()
+  return id || null
+}

@@ -18,7 +18,8 @@ import {
 } from '../types'
 import { fromDateInput, toDateInput } from '../utils/dates'
 import { formatDate, formatShortDate, marginHint, money } from '../utils/format'
-import { orderHeading, orderTitle } from '../utils/orders'
+import { repeatOrderLink } from '../utils/links'
+import { applyOrderForm, canRepeatOrder, orderHeading, orderTitle } from '../utils/orders'
 import {
   REMINDER_KIND_HINT,
   REMINDER_KIND_ICON,
@@ -41,12 +42,23 @@ import {
 import { orderCost, orderProfit } from '../utils/stats'
 import { statusTone } from '../utils/status'
 
-export function OrderDetail({ id, presetClientId }: { id: string; presetClientId?: string | null }) {
+export function OrderDetail({
+  id,
+  presetClientId,
+  presetRepeatFrom,
+}: {
+  id: string
+  presetClientId?: string | null
+  // Заказ-образец для «Повторить заказ» (параметр repeat в адресе).
+  presetRepeatFrom?: string | null
+}) {
   const { db, refresh } = useData()
   const { navigate } = useRoute()
   const isNew = id === 'new'
 
   const existing = isNew ? undefined : db.getOrder(id)
+  // Образец для повтора: по нему собирается черновик нового заказа.
+  const repeatSource = isNew && presetRepeatFrom ? db.getOrder(presetRepeatFrom) : undefined
   const [editing, setEditing] = useState(isNew)
   const [pdfBusy, setPdfBusy] = useState(false)
   const [pdfError, setPdfError] = useState('')
@@ -66,16 +78,28 @@ export function OrderDetail({ id, presetClientId }: { id: string; presetClientId
   }
 
   if (editing) {
-    const initial = existing ?? db.createOrderDraft(presetClientId ?? null)
+    // «Повторить заказ» заполняет форму по образцу старого заказа, обычный новый
+    // заказ начинается с пустых позиций.
+    const initial =
+      existing ??
+      (repeatSource ? db.createRepeatDraft(repeatSource) : db.createOrderDraft(presetClientId ?? null))
+    // Отмена повтора возвращает к заказу-образцу.
+    const backPath = repeatSource ? `/orders/${repeatSource.id}` : '/orders'
     return (
       <OrderForm
         initial={initial}
         products={db.getProducts()}
-        onCancel={() => (isNew ? navigate('/orders') : setEditing(false))}
+        header={
+          repeatSource
+            ? `Новый заказ по образцу ${orderTitle(repeatSource)} — позиции, цены и количества уже перенесены.`
+            : undefined
+        }
+        onCancel={() => (isNew ? navigate(backPath) : setEditing(false))}
         onSave={(order) => {
           db.saveOrder(order)
           refresh()
-          navigate('/orders')
+          // Повторённый заказ открываем сразу: видно новый номер и статус «Новый».
+          navigate(repeatSource ? `/orders/${order.id}` : '/orders')
         }}
         onDelete={
           isNew
@@ -369,6 +393,25 @@ export function OrderDetail({ id, presetClientId }: { id: string; presetClientId
         </div>
       )}
 
+      {/* «Повторить заказ» — только у законченной сделки: у активного заказа повторять
+          нечего. Переносятся клиент, позиции, цены и количества, но не оплаты,
+          напоминания и статус — они относятся к прошлому заказу. */}
+      {canRepeatOrder(order) && (
+        <div style={{ marginTop: 16 }}>
+          <Button
+            variant="secondary"
+            icon="repeat"
+            full
+            onClick={() => navigate(repeatOrderLink(order.id))}
+          >
+            Повторить заказ
+          </Button>
+          <div className="field-hint" style={{ marginTop: 8, textAlign: 'center' }}>
+            Новый заказ с теми же позициями и ценами. Оплаты, напоминания и чек не переносятся.
+          </div>
+        </div>
+      )}
+
       <div className="detail-actions">
         <Button variant="outline" icon="edit" full onClick={() => setEditing(true)}>
           Изменить
@@ -641,12 +684,15 @@ function ReminderModal({
 function OrderForm({
   initial,
   products,
+  header,
   onSave,
   onCancel,
   onDelete,
 }: {
   initial: Order
   products: Product[]
+  // Пояснение над формой: например, что новый заказ повторяет старый.
+  header?: string
   onSave: (order: Order) => void
   onCancel: () => void
   onDelete?: () => void
@@ -734,21 +780,25 @@ function OrderForm({
       }
     }
 
-    onSave({
-      id: initial.id,
-      number: initial.number,
-      clientId: clientId || null,
-      date: fromDateInput(date),
-      status,
-      // Платежи вводятся в карточке заказа и здесь сохраняются как есть.
-      payments: initial.payments ?? [],
-      comment: comment.trim(),
-      items: clean,
-    })
+    onSave(
+      applyOrderForm(initial, {
+        clientId: clientId || null,
+        date: fromDateInput(date),
+        status,
+        comment: comment.trim(),
+        items: clean,
+      }),
+    )
   }
 
   return (
     <div className="form">
+      {header && (
+        <div className="field-hint" style={{ marginBottom: 4 }}>
+          {header}
+        </div>
+      )}
+
       <Field label="Клиент">
         <SuggestField
           selected={selectedClientOption}

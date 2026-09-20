@@ -9,6 +9,8 @@ import {
   clientsLink,
   matchesOrderFilter,
   orderFilterFromQuery,
+  repeatOrderFromQuery,
+  repeatOrderLink,
   statisticsLink,
   statisticsPeriodFromQuery,
 } from './links'
@@ -113,5 +115,19 @@ describe('ссылки архива клиентов', () => {
     expect(clientLink('c1')).toBe('/clients/c1')
     expect(clientCardBackFromQuery('archive')).toBe('/clients?archive=1')
     expect(clientCardBackFromQuery(null)).toBe('/clients')
+  })
+})
+
+describe('ссылка повтора заказа', () => {
+  it('ведёт в форму нового заказа с заказом-образцом', () => {
+    expect(repeatOrderLink('o42')).toBe('/orders/new?repeat=o42')
+  })
+
+  it('читает образец из адреса и терпит пустое значение', () => {
+    expect(repeatOrderFromQuery('o42')).toBe('o42')
+    expect(repeatOrderFromQuery('  o42 ')).toBe('o42')
+    expect(repeatOrderFromQuery('')).toBeNull()
+    expect(repeatOrderFromQuery(null)).toBeNull()
+    expect(repeatOrderFromQuery('   ')).toBeNull()
   })
 })

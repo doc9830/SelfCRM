@@ -198,7 +198,7 @@ Actions → **Telegram Release** → **Run workflow**:
 
 ## 📋 Прочее
 
-- APK: `SelfCRM-1.4.0.apk`, versionCode 21. Тесты: 174.
+- APK: `SelfCRM-1.4.0.apk`, versionCode 22. Тесты: 186.
 ```
 
 Так выглядит готовый пост по этому шаблону (подпись к обложке — 355 из 1024 символов,

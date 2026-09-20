@@ -695,3 +695,123 @@ describe('Database: напоминания по заказам', () => {
   })
 })
 
+describe('Database: повтор заказа', () => {
+  // Завершённый заказ с клиентом, оплатой, напоминанием и позицией по 90 ₽
+  // (в каталоге товар уже стоит 100 ₽ — повтор берёт цену сделки).
+  function makeDoneOrder(db: Database): Order {
+    db.saveClient({ id: 'c1', name: 'Иван', phone: '', email: '', comment: '', createdAt: '' })
+    db.saveProduct(makeProduct({ id: 'p1', name: 'Смеситель', price: 100, cost: 40, stock: 10 }))
+    const source = db.createOrderDraft('c1')
+    source.date = new Date(2026, 7, 12, 10).toISOString()
+    source.status = 'done'
+    source.comment = 'Доставка в 15:00'
+    source.items = [{ productId: 'p1', name: 'Смеситель', price: 90, qty: 3, cost: 35 }]
+    db.saveOrder(source)
+    db.saveOrder(addPayment(db.getOrder(source.id) as Order, 150, 'Наличные'))
+    db.addReminder(source.id, { kind: 'call', text: '', dueAt: new Date(2026, 8, 20, 9).toISOString() })
+    return db.getOrder(source.id) as Order
+  }
+
+  it('переносит клиента и позиции, но не данные прошлой сделки', () => {
+    const { db } = setup()
+    const source = makeDoneOrder(db)
+
+    const draft = db.createRepeatDraft(source)
+
+    // Новый заказ: свой идентификатор, следующий номер, текущая дата, статус «Новый».
+    expect(draft.id).not.toBe(source.id)
+    expect(draft.number).toBe((source.number as number) + 1)
+    expect(draft.status).toBe('new')
+    expect(draft.clientId).toBe('c1')
+    expect(Date.now() - new Date(draft.date).getTime()).toBeLessThan(5000)
+    // Позиции переносятся со снимком цены, количества и себестоимости.
+    expect(draft.items).toEqual([
+      { productId: 'p1', name: 'Смеситель', price: 90, qty: 3, cost: 35 },
+    ])
+    // Оплаты, напоминания и комментарий относятся к прошлой сделке — их нет.
+    expect(draft.payments).toEqual([])
+    expect(draft.reminders).toEqual([])
+    expect(draft.comment).toBe('')
+    // Сумма нового заказа считается заново по перенесённым позициям.
+    expect(db.getOrderTotal(draft)).toBe(270)
+  })
+
+  it('копии позиций не связаны со старым заказом', () => {
+    const { db } = setup()
+    const source = makeDoneOrder(db)
+
+    const draft = db.createRepeatDraft(db.getOrder(source.id) as Order)
+    draft.items[0].qty = 5
+    draft.items[0].price = 70
+
+    const untouched = db.getOrder(source.id) as Order
+    expect(untouched.items[0].qty).toBe(3)
+    expect(untouched.items[0].price).toBe(90)
+  })
+
+  it('старый заказ после повтора не изменяется', () => {
+    const { db } = setup()
+    const source = makeDoneOrder(db)
+    const before = db.getOrder(source.id) as Order
+
+    db.saveOrder(db.createRepeatDraft(before))
+
+    expect(db.getOrder(source.id)).toEqual(before)
+    expect(db.getOrderReminders(source.id)).toHaveLength(1)
+    expect(db.getOrder(source.id)?.status).toBe('done')
+    expect(db.getOrder(source.id)?.payments).toHaveLength(1)
+  })
+
+  it('склад списывается по новому заказу, а история прошлого не дублируется', () => {
+    const { db } = setup()
+    const source = makeDoneOrder(db)
+    // Завершённый заказ уже списал 3 штуки: 10 − 3 = 7.
+    expect(db.getProduct('p1')?.stock).toBe(7)
+    expect(db.getStockMoves('p1')).toHaveLength(1)
+
+    const draft = db.createRepeatDraft(db.getOrder(source.id) as Order)
+    db.saveOrder(draft)
+
+    // Новый заказ списал товар как обычный новый заказ.
+    expect(db.getProduct('p1')?.stock).toBe(4)
+    const moves = db.getStockMoves('p1')
+    expect(moves).toHaveLength(2)
+    expect(moves[0].note).toBe(`Заказ №${draft.number}`)
+    expect(moves[0].delta).toBe(-3)
+    expect(moves[0].stockAfter).toBe(4)
+  })
+
+  it('повтор отменённого заказа списывает товар заново', () => {
+    const { db } = setup()
+    db.saveProduct(makeProduct({ id: 'p1', price: 100, stock: 10 }))
+    const cancelled = db.createOrderDraft()
+    cancelled.status = 'cancelled'
+    cancelled.items = [{ productId: 'p1', name: 'Товар', price: 100, qty: 2 }]
+    db.saveOrder(cancelled)
+    // Отмена вернула товар на склад.
+    expect(db.getProduct('p1')?.stock).toBe(10)
+
+    db.saveOrder(db.createRepeatDraft(db.getOrder(cancelled.id) as Order))
+
+    expect(db.getProduct('p1')?.stock).toBe(8)
+  })
+
+  it('услуги в повторе склад не двигают', () => {
+    const { db } = setup()
+    db.saveProduct(makeProduct({ id: 'p1', stock: 10 }))
+    db.saveProduct(makeProduct({ id: 's1', name: 'Выезд мастера', kind: 'service', stock: 0 }))
+    const source = db.createOrderDraft()
+    source.status = 'done'
+    source.items = [
+      { productId: 'p1', name: 'Товар', price: 100, qty: 1 },
+      { productId: 's1', name: 'Выезд мастера', price: 500, qty: 1 },
+    ]
+    db.saveOrder(source)
+
+    db.saveOrder(db.createRepeatDraft(db.getOrder(source.id) as Order))
+
+    expect(db.getProduct('p1')?.stock).toBe(8)
+    expect(db.getStockMoves('s1')).toHaveLength(0)
+  })
+})
+

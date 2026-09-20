@@ -34,6 +34,7 @@ export type IconName =
   | 'history'
   | 'archive'
   | 'bell'
+  | 'repeat'
 
 const stroke = {
   fill: 'none',
@@ -248,6 +249,15 @@ const ICONS: Record<IconName, ReactNode> = {
     <>
       <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
       <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+    </>
+  ),
+  // Петля из двух стрелок — «Повторить заказ».
+  repeat: (
+    <>
+      <polyline points="17 1 21 5 17 9" />
+      <path d="M3 11V9a4 4 0 0 1 4-4h14" />
+      <polyline points="7 23 3 19 7 15" />
+      <path d="M21 13v2a4 4 0 0 1-4 4H3" />
     </>
   ),
 }

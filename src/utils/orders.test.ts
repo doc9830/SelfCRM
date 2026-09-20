@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { Order } from '../types'
 import {
+  applyOrderForm,
   assignMissingNumbers,
+  canRepeatOrder,
   formatOrderNumber,
   nextOrderNumber,
   orderHeading,
@@ -58,5 +60,68 @@ describe('подписи заказа', () => {
   it('без номера обходится общим названием', () => {
     expect(formatOrderNumber(makeOrder())).toBe('')
     expect(orderTitle(makeOrder())).toBe('Заказ')
+  })
+})
+
+describe('повтор заказа', () => {
+  it('повторяются завершённый и отменённый заказы', () => {
+    expect(canRepeatOrder(makeOrder({ status: 'done' }))).toBe(true)
+    expect(canRepeatOrder(makeOrder({ status: 'cancelled' }))).toBe(true)
+  })
+
+  it('активные заказы не повторяются', () => {
+    expect(canRepeatOrder(makeOrder({ status: 'new' }))).toBe(false)
+    expect(canRepeatOrder(makeOrder({ status: 'in_progress' }))).toBe(false)
+  })
+})
+
+describe('сборка заказа из формы', () => {
+  it('берёт из формы позиции и правки, а платежи и напоминания сохраняет', () => {
+    const initial = makeOrder({
+      number: 42,
+      status: 'done',
+      items: [{ productId: 'p1', name: 'Товар', price: 100, qty: 1 }],
+      payments: [{ id: 'pay1', amount: 100, date: new Date(2026, 8, 19).toISOString(), comment: '' }],
+      reminders: [
+        {
+          id: 'rem1',
+          kind: 'call',
+          text: 'Позвонить',
+          dueAt: new Date(2026, 8, 20, 9).toISOString(),
+          createdAt: new Date(2026, 8, 19).toISOString(),
+        },
+      ],
+    })
+
+    const saved = applyOrderForm(initial, {
+      clientId: 'c7',
+      date: new Date(2026, 8, 21, 10).toISOString(),
+      status: 'in_progress',
+      comment: '  Уточнить размеры  ',
+      items: [{ productId: 'p1', name: 'Товар', price: 120, qty: 2 }],
+    })
+
+    // Идентификатор и номер не меняются, а поля формы берутся из введённых значений.
+    expect(saved.id).toBe(initial.id)
+    expect(saved.number).toBe(42)
+    expect(saved.clientId).toBe('c7')
+    expect(saved.status).toBe('in_progress')
+    expect(saved.items).toEqual([{ productId: 'p1', name: 'Товар', price: 120, qty: 2 }])
+    // Платежи и напоминания форма не редактирует: они переезжают без изменений.
+    expect(saved.payments).toEqual(initial.payments)
+    expect(saved.reminders).toEqual(initial.reminders)
+  })
+
+  it('достраивает пустые списки, если их не было в старом заказе', () => {
+    const saved = applyOrderForm(makeOrder(), {
+      clientId: null,
+      date: new Date(2026, 8, 21, 10).toISOString(),
+      status: 'new',
+      comment: '',
+      items: [],
+    })
+
+    expect(saved.payments).toEqual([])
+    expect(saved.reminders).toEqual([])
   })
 })
