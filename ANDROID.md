@@ -160,6 +160,10 @@ chmod 600 .env.local
    JAVA_HOME=/path/to/jdk-21 ./gradlew assembleRelease
    ```
 
+   Если в `~/.gradle/gradle.properties` задан `org.gradle.java.home`, он перекрывает `JAVA_HOME`
+   (на JDK 17 сборка падает на `Cannot find a Java installation … languageVersion=21`): передайте
+   JDK 21 и в запуск Gradle — `./gradlew assembleRelease -Dorg.gradle.java.home=/path/to/jdk-21`.
+
    Реквизиты подписи лежат в `android/keystore.properties` (файл и `*.keystore` не коммитятся,
    см. `android/.gitignore`):
 
@@ -175,9 +179,13 @@ chmod 600 .env.local
    установится.
 
 4. Готовый файл: `android/app/build/outputs/apk/release/app-release.apk`.
-5. Создайте релиз на GitHub с тегом `v<версия>` (например `v1.0.6`) **черновиком**, приложите к
-   нему APK, а затем нажмите «Publish release»: событие `published` фиксирует ассеты на момент
-   публикации, поэтому APK, добавленный после неё, в пост не попадёт. Опишите изменения —
+5. Сначала создайте тег — `git push origin v<версия>` (например `v1.0.6`), — и только затем релиз на
+   GitHub **черновиком** с этим тегом. Черновик, созданный раньше тега, GitHub держит под
+   служебным именем `untagged-<хеш>` и при публикации может оставить его релизу: ссылки
+   `/releases/download/<тег>/…` начинают отдавать 404, а приложение перестаёт видеть обновление
+   (версия берётся из `tag_name`, а `untagged-…` сравнивается как `0.0.0`). Приложите к
+   черновику APK, а затем нажмите «Publish release»: событие `published` фиксирует ассеты на
+   момент публикации, поэтому APK, добавленный после неё, в пост не попадёт. Опишите изменения —
    приложение показывает это описание при проверке обновлений. Пост с этими
    изменениями автоматически уходит в Telegram-канал (обложка, кнопка скачивания APK):
    настройка и формат описания — в [docs/TELEGRAM_RELEASES.md](./docs/TELEGRAM_RELEASES.md),
@@ -187,6 +195,25 @@ chmod 600 .env.local
    перед публикацией обязательно проверьте текст в dry-run — порядок для черновика описан в
    [docs/TELEGRAM_RELEASES.md](./docs/TELEGRAM_RELEASES.md), шаг 4 (через `--release-file`, потому
    что у черновика ещё нет тега). В выводе должно быть `Сообщений: 1` и подпись ≤ 1024 без «…».
+
+   После публикации проверьте тег релиза — от него зависят и ссылка на APK, и проверка
+   обновлений в приложении:
+
+   ```bash
+   curl -s https://api.github.com/repos/doc9830/SelfCRM/releases/latest | grep '"tag_name"'
+   ```
+
+   В ответе должно быть `"tag_name": "v<версия>"`. Если тег подменился на `untagged-<хеш>`,
+   верните правильный (он уже стоит на коммите релиза):
+
+   ```bash
+   curl -X PATCH -H "Authorization: token <токен>" -H 'Content-Type: application/json' \
+     -d '{"tag_name":"v<версия>"}' \
+     https://api.github.com/repos/doc9830/SelfCRM/releases/<id>
+   ```
+
+   Правка тега пост в Telegram не рассылает (событие `published` не повторяется): отправьте его
+   вручную — **Actions → Telegram Release → Run workflow**, тег `v<версия>`.
 6. Обновите лендинг ([SelfCRMlanding](https://github.com/doc9830/SelfCRMlanding)): в
    `index.html` — номер версии и ссылку на APK (meta, JSON-LD, кнопка, шаг 01), описание новых
    возможностей и свежие скриншоты, затем `og-cover.png`. Порядок съёмки и сборки обложки
