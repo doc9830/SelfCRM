@@ -11,7 +11,11 @@ export interface RoutePoint {
   address?: string
 }
 
-function isNativeAndroid(): boolean {
+// Нативная сборка Android (Capacitor). Признак нужен и ссылкам на клиента (geo:, tel:),
+// и обратной связи: письмо передаётся системе тем же способом (utils/feedback.ts).
+export function isNativeAndroid(): boolean {
+  // Без окна (тесты, серверный рендер) платформы нет: проверка идёт до обращения к window.
+  if (typeof window === 'undefined') return false
   const cap = (
     window as unknown as {
       Capacitor?: { isNativePlatform?: () => boolean; getPlatform?: () => string }

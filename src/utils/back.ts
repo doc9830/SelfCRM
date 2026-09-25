@@ -13,6 +13,7 @@ export const HOME_PATH = '/'
 export const CLIENTS_PATH = '/clients'
 export const ORDERS_PATH = '/orders'
 export const STOCK_PATH = '/stock'
+export const SETTINGS_PATH = '/settings'
 
 // Куда ведёт стрелочка «Назад» в шапке. null — стрелочки на экране нет
 // (верхний уровень раздела: списки, настройки, главная).
@@ -28,6 +29,9 @@ export function headerBackTarget(route: Route): string | null {
       return seg[1] ? STOCK_PATH : null
     case 'statistics':
       return HOME_PATH
+    case 'feedback':
+      // Обратная связь открывается из настроек — туда и возвращаемся.
+      return SETTINGS_PATH
     default:
       return null
   }

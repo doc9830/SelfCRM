@@ -7,6 +7,8 @@ import {
   clientLink,
   clientsArchiveFromQuery,
   clientsLink,
+  feedbackLink,
+  feedbackTopicFromQuery,
   matchesOrderFilter,
   orderFilterFromQuery,
   repeatOrderFromQuery,
@@ -129,5 +131,24 @@ describe('ссылка повтора заказа', () => {
     expect(repeatOrderFromQuery('')).toBeNull()
     expect(repeatOrderFromQuery(null)).toBeNull()
     expect(repeatOrderFromQuery('   ')).toBeNull()
+  })
+})
+
+describe('ссылка на обратную связь', () => {
+  it('без вида обращения ведёт на форму', () => {
+    expect(feedbackLink()).toBe('/feedback')
+  })
+
+  it('с видом обращения — на форму с отмеченной темой', () => {
+    expect(feedbackLink('bug')).toBe('/feedback?topic=bug')
+    expect(feedbackLink('idea')).toBe('/feedback?topic=idea')
+  })
+
+  it('читает вид обращения из адреса и терпит неизвестное значение', () => {
+    expect(feedbackTopicFromQuery('bug')).toBe('bug')
+    expect(feedbackTopicFromQuery(' Question ')).toBe('question')
+    expect(feedbackTopicFromQuery('')).toBeNull()
+    expect(feedbackTopicFromQuery(null)).toBeNull()
+    expect(feedbackTopicFromQuery('spam')).toBeNull()
   })
 })

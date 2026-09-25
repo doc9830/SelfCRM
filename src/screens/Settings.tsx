@@ -12,6 +12,8 @@ import { Capacitor } from '@capacitor/core'
 import { downloadUpdate, fetchLatestRelease, installUpdate, isNewerVersion, openExternal, type ReleaseInfo } from '../updates'
 import { useRoute } from '../router'
 import { APP_VERSION } from '../version'
+import { FEEDBACK_EMAIL } from '../utils/feedback'
+import { feedbackLink } from '../utils/links'
 
 const isDev = import.meta.env.DEV
 
@@ -37,7 +39,7 @@ type UpdateState =
 export function Settings() {
   const { db, refresh } = useData()
   const { theme, toggleTheme } = useTheme()
-  const { route } = useRoute()
+  const { route, navigate } = useRoute()
   const fileRef = useRef<HTMLInputElement>(null)
   const addressFileRef = useRef<HTMLInputElement>(null)
   const updatesRef = useRef<HTMLDivElement>(null)
@@ -451,6 +453,34 @@ export function Settings() {
           )}
         </Card>
       </div>
+
+      <Card className="settings-group">
+        <div className="section-title" style={{ marginBottom: 6 }}>
+          Обратная связь
+        </div>
+        <div className="settings-row-desc" style={{ marginBottom: 4 }}>
+          Письмо уходит с вашего адреса на {FEEDBACK_EMAIL} — ответ придёт туда же.
+          Отправляет письмо ваша почтовая программа.
+        </div>
+        <div className="settings-row">
+          <div>
+            <div className="settings-row-title">Написать разработчику</div>
+            <div className="settings-row-desc">Предложить идею или задать вопрос</div>
+          </div>
+          <Button size="sm" variant="secondary" icon="mail" onClick={() => navigate(feedbackLink())}>
+            Открыть
+          </Button>
+        </div>
+        <div className="settings-row">
+          <div>
+            <div className="settings-row-title">Сообщить об ошибке</div>
+            <div className="settings-row-desc">Письмо откроется с темой «Ошибка»</div>
+          </div>
+          <Button size="sm" variant="secondary" icon="alert" onClick={() => navigate(feedbackLink('bug'))}>
+            Открыть
+          </Button>
+        </div>
+      </Card>
 
       <Card>
         <div className="settings-row-title">SelfCRM</div>

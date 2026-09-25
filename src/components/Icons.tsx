@@ -38,6 +38,8 @@ export type IconName =
   // Стрелки вниз и вверх — массовый приход и списание на складе.
   | 'arrow-down'
   | 'arrow-up'
+  // Конверт — обратная связь: письмо разработчику из настроек.
+  | 'mail'
 
 const stroke = {
   fill: 'none',
@@ -275,6 +277,13 @@ const ICONS: Record<IconName, ReactNode> = {
     <>
       <line x1="12" y1="19" x2="12" y2="5" />
       <polyline points="19 12 12 5 5 12" />
+    </>
+  ),
+  // Конверт — обратная связь.
+  mail: (
+    <>
+      <rect x="2" y="4" width="20" height="16" rx="2" />
+      <polyline points="22 6 12 13 2 6" />
     </>
   ),
 }

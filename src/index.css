@@ -708,6 +708,24 @@ button {
   color: #fff;
 }
 
+/* ---- Обратная связь ---- */
+
+/* Адрес получателя письма: показывается крупно и с кнопкой «Копировать», потому что его
+   читают глазами и вводят вручную, если почтовая программа не открылась. */
+.feedback-mail {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: space-between;
+}
+
+.feedback-mail span {
+  font-weight: 600;
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+
 /* ---- Dashboard ---- */
 
 /* Блоки главного экрана — плашки, напоминания, разделы — разделяются одинаковым

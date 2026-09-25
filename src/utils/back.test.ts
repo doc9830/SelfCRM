@@ -26,6 +26,11 @@ describe('headerBackTarget — куда ведёт стрелочка в шап�
     expect(headerBackTarget(route('/statistics?period=month'))).toBe('/')
   })
 
+  it('с обратной связи — в настройки', () => {
+    expect(headerBackTarget(route('/feedback'))).toBe('/settings')
+    expect(headerBackTarget(route('/feedback?topic=bug'))).toBe('/settings')
+  })
+
   it('на верхнем уровне раздела стрелочки нет', () => {
     expect(headerBackTarget(route('/'))).toBeNull()
     expect(headerBackTarget(route('/clients'))).toBeNull()
@@ -44,6 +49,7 @@ describe('backTarget — куда ведёт системная кнопка «�
     expect(backTarget(route('/orders/7'))).toBe('/orders')
     expect(backTarget(route('/stock/3'))).toBe('/stock')
     expect(backTarget(route('/statistics'))).toBe('/')
+    expect(backTarget(route('/feedback'))).toBe('/settings')
   })
 
   it('с разделов верхнего уровня возвращает на главную', () => {

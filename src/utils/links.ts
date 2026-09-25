@@ -2,6 +2,7 @@
 // конкретный список заказов и на раздел статистики, поэтому параметры адреса —
 // часть контракта экранов, а не разовая договорённость.
 import { ORDER_STATUSES, isActiveStatus, type Order, type OrderStatus } from '../types'
+import { FEEDBACK_TOPICS, type FeedbackTopic } from './feedback'
 import { PERIOD_KEYS, type PeriodKey } from './stats'
 
 // Фильтр списка заказов. «Активные» — это группа статусов (новый + в работе),
@@ -85,4 +86,18 @@ export function repeatOrderLink(orderId: string): string {
 export function repeatOrderFromQuery(value: string | null): string | null {
   const id = (value ?? '').trim()
   return id || null
+}
+
+// Экран обратной связи: «Написать разработчику» открывает форму без темы, «Сообщить
+// об ошибке» — с уже отмеченной темой. Вид обращения живёт в адресе, как фильтры и
+// периоды, поэтому ссылку можно открыть заново, а кнопка «Назад» вернёт в настройки.
+export function feedbackLink(topic?: FeedbackTopic): string {
+  return topic ? `/feedback?topic=${topic}` : '/feedback'
+}
+
+// Значение параметра topic из адреса. Пустое или неизвестное значение — null:
+// тогда экран оставляет выбранной тему по умолчанию.
+export function feedbackTopicFromQuery(value: string | null): FeedbackTopic | null {
+  const normalized = (value ?? '').trim().toLowerCase()
+  return (FEEDBACK_TOPICS as string[]).includes(normalized) ? (normalized as FeedbackTopic) : null
 }
