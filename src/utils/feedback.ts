@@ -164,16 +164,28 @@ export function collectDiagnostics(counts: {
 
 // Встроенный WebView мессенджера (Telegram Mini App и подобные) не открывает внешние
 // приложения обычной ссылкой: переход внутри него игнорируется. Такой WebView даёт свой
-// способ открыть ссылку — им и пользуемся. Это проверка возможности, а не зависимость
-// от мессенджера: без его скрипта поле остаётся пустым.
+// способ открыть ссылку — им и пользуемся.
+//
+// Объекта WebApp недостаточно: скрипт мессенджера подключается страницей и создаёт его
+// в любом браузере, где ничего не работает. Поэтому клиент должен назвать себя сам:
+// передать данные приложения (`initData`) или назвать платформу (вне клиента она
+// 'unknown'), а в Windows-клиенте о себе говорит прокси WebView.
 interface OpenLinkHost {
   openLink?: (url: string) => void
+  initData?: string
+  platform?: string
 }
 
 function embeddedHost(): OpenLinkHost | null {
   if (typeof window === 'undefined') return null
-  const telegram = (window as { Telegram?: { WebApp?: OpenLinkHost } }).Telegram
-  return telegram?.WebApp?.openLink ? telegram.WebApp : null
+  const host = (window as { Telegram?: { WebApp?: OpenLinkHost } }).Telegram?.WebApp
+  if (!host?.openLink) return null
+  if (host.initData) return host
+  if (host.platform && host.platform !== 'unknown') return host
+  const proxy = (window as { TelegramWebviewProxy?: unknown }).TelegramWebviewProxy
+  if (proxy !== undefined) return host
+  const external = (window as { external?: { notify?: unknown } }).external
+  return external && 'notify' in external ? host : null
 }
 
 // Куда в итоге попало письмо: в системное приложение (Android), в почтовую программу

@@ -187,9 +187,32 @@ describe('openMailto и платформа', () => {
 
   it('во встроенном WebView мессенджера отдаёт ссылку его API', () => {
     const openLink = vi.fn()
-    vi.stubGlobal('window', { Telegram: { WebApp: { openLink } }, location: {} })
+    vi.stubGlobal('window', {
+      Telegram: { WebApp: { openLink, initData: 'query_id=AAF&user=%7B%7D' } },
+      location: {},
+    })
     expect(openMailto('mailto:a@b')).toBe('embedded')
     expect(openLink).toHaveBeenCalledWith('mailto:a@b')
     expect(platformLabel()).toBe('Telegram (мини-приложение)')
+  })
+
+  it('клиент назвал себя платформой — тоже мини-приложение', () => {
+    const openLink = vi.fn()
+    vi.stubGlobal('window', { Telegram: { WebApp: { openLink, platform: 'android' } }, location: {} })
+    expect(openMailto('mailto:a@b')).toBe('embedded')
+    expect(platformLabel()).toBe('Telegram (мини-приложение)')
+  })
+
+  it('объект WebApp без данных клиента Telegram не считается: скрипт есть и в браузере', () => {
+    const openLink = vi.fn()
+    const location: { href?: string } = {}
+    vi.stubGlobal('window', {
+      Telegram: { WebApp: { openLink, initData: '', platform: 'unknown' } },
+      location,
+    })
+    expect(openMailto('mailto:a@b')).toBe('app')
+    expect(openLink).not.toHaveBeenCalled()
+    expect(location.href).toBe('mailto:a@b')
+    expect(platformLabel()).toBe('Браузер')
   })
 })
