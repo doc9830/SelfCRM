@@ -79,8 +79,8 @@ export function Orders() {
       {filtered.length === 0 ? (
         <EmptyState
           icon="receipt"
-          title="Заказов нет"
-          description="Создайте первый заказ"
+          title="Заказов пока нет"
+          description="Создайте заказ из карточки клиента или кнопкой ниже"
           action={
             <Button icon="plus" onClick={() => navigate('/orders/new')}>
               Создать заказ

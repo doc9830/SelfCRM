@@ -1,7 +1,7 @@
 import { useRoute } from '../router'
 import { useData } from '../state/DataContext'
 import { isActiveStatus, isService, type Order } from '../types'
-import { cx } from '../components/ui'
+import { Button, EmptyState, cx } from '../components/ui'
 import { money, plural } from '../utils/format'
 import { ACTIVE_ORDERS_LINK, statisticsLink } from '../utils/links'
 import { orderTitle } from '../utils/orders'
@@ -21,6 +21,12 @@ export function Dashboard() {
   const orders = db.getOrders()
   const products = db.getProducts()
 
+  // Пустая база: нулевые плашки ничего не объясняют, поэтому вместо них на первом
+  // запуске стоит подсказка, с чего начать. Как только появляется первая запись
+  // (клиент, заказ или товар), экран сразу возвращается к обычному виду.
+  const isFirstRun =
+    db.getClients(true).length === 0 && orders.length === 0 && products.length === 0
+
   const activeOrders = orders.filter((o) => isActiveStatus(o.status))
   // Выручка — завершённые заказы текущего месяца: на этот же период ведёт плашка.
   const month = summarizeOrders(filterOrdersByRange(orders, periodRange('month')))
@@ -38,21 +44,35 @@ export function Dashboard() {
 
   return (
     <div className="dash">
-      {/* Плашки кликабельны: активные заказы открывают список новых и «в работе»,
-          выручка — статистику с периодом «Месяц». */}
-      <div className="stat-grid">
-        <Stat
-          value={String(activeOrders.length)}
-          label="Активные заказы"
-          onClick={() => navigate(ACTIVE_ORDERS_LINK)}
+      {/* Первый запуск: вместо нулей — понятное объяснение и первое действие. */}
+      {isFirstRun ? (
+        <EmptyState
+          icon="users"
+          title="Начните с первого клиента"
+          description="Добавьте клиента, чтобы создавать заказы и видеть историю работы."
+          action={
+            <Button icon="plus" onClick={() => navigate('/clients/new')}>
+              Добавить клиента
+            </Button>
+          }
         />
-        <Stat
-          value={money(month.revenue)}
-          label="Выручка за месяц"
-          accent
-          onClick={() => navigate(statisticsLink('month'))}
-        />
-      </div>
+      ) : (
+        /* Плашки кликабельны: активные заказы открывают список новых и «в работе»,
+           выручка — статистику с периодом «Месяц». */
+        <div className="stat-grid">
+          <Stat
+            value={String(activeOrders.length)}
+            label="Активные заказы"
+            onClick={() => navigate(ACTIVE_ORDERS_LINK)}
+          />
+          <Stat
+            value={money(month.revenue)}
+            label="Выручка за месяц"
+            accent
+            onClick={() => navigate(statisticsLink('month'))}
+          />
+        </div>
+      )}
 
       {/* Напоминания идут под плашками: цифры читаются первыми, а список может быть длинным. */}
       {reminders.groups.length > 0 && (

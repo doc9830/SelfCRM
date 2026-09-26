@@ -53,8 +53,12 @@ export function Products() {
       {filtered.length === 0 ? (
         <EmptyState
           icon="box"
-          title={query ? 'Ничего не найдено' : 'Пока нет товаров'}
-          description={query ? 'Попробуйте изменить запрос' : 'Добавьте первый товар'}
+          title={query ? 'Ничего не найдено' : 'Добавьте товары или услуги'}
+          description={
+            query
+              ? 'Попробуйте изменить запрос'
+              : 'Товары можно учитывать на складе, а услуги со склада не списываются'
+          }
           action={
             !query ? (
               <Button icon="plus" onClick={() => setEditing('new')}>
