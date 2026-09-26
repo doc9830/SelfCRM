@@ -8,7 +8,7 @@
 
 **Как попробовать:**
 
-- **Android** — скачать APK со [страницы релизов](https://github.com/doc9830/SelfCRM/releases) и открыть файл: 1.6.0, около 4 МБ;
+- **Android** — скачать APK со [страницы релизов](https://github.com/doc9830/SelfCRM/releases) и открыть файл: 1.6.1, около 4 МБ;
 - **Telegram** — [@fastcrm_bot](https://t.me/fastcrm_bot) → «Открыть SelfCRM»: то же приложение прямо в мессенджере, без установки;
 - **Страница проекта** — https://doc9830.github.io/SelfCRMlanding/;
 - **Исходный код** — доступен на GitHub ([source available](./LICENSE): код можно читать и собирать для себя, свободная лицензия не выдаётся).
