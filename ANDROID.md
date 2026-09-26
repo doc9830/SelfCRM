@@ -7,9 +7,10 @@
 
 - Node.js 18+
 - [Android Studio](https://developer.android.com/studio) с Android SDK
-- JDK 21 — Capacitor и Android Gradle Plugin собирают release именно на JDK 21
-  (на JDK 17 сборка завершается ошибкой)
-- Переменные окружения: `ANDROID_HOME` (или `ANDROID_SDK_ROOT`) указывает на SDK
+- **JDK 21** — сборка APK идёт только на нём: Capacitor и Android Gradle Plugin собирают
+  release именно на JDK 21
+- Переменные окружения: `ANDROID_HOME` (или `ANDROID_SDK_ROOT`) указывает на SDK — либо файл
+  `android/local.properties` со строкой `sdk.dir=/path/to/Android/Sdk` (файл не коммитится)
 
 ## Шаги
 
@@ -201,9 +202,11 @@ chmod 600 .env.local
    JAVA_HOME=/path/to/jdk-21 ./gradlew assembleRelease
    ```
 
-   Если в `~/.gradle/gradle.properties` задан `org.gradle.java.home`, он перекрывает `JAVA_HOME`
-   (на JDK 17 сборка падает на `Cannot find a Java installation … languageVersion=21`): передайте
-   JDK 21 и в запуск Gradle — `./gradlew assembleRelease -Dorg.gradle.java.home=/path/to/jdk-21`.
+   Каким JDK собирается проект, видно в шапке вывода: `./gradlew -v` печатает строку `JVM:`.
+   Если в `~/.gradle/gradle.properties` задан `org.gradle.java.home`, он перекрывает `JAVA_HOME`,
+   и чужой JDK приводит к ошибке `Cannot find a Java installation … languageVersion=21` — уберите
+   строку или укажите в ней JDK 21. Разово помогает флаг запуска:
+   `./gradlew assembleRelease -Dorg.gradle.java.home=/path/to/jdk-21`.
 
    Реквизиты подписи лежат в `android/keystore.properties` (файл и `*.keystore` не коммитятся,
    см. `android/.gitignore`):
@@ -215,9 +218,11 @@ chmod 600 .env.local
    keyPassword=<пароль ключа>
    ```
 
-   Если `keystore.properties` отсутствует, сборка не падает, но APK остаётся неподписанным
-   (`android/app/build/outputs/apk/release/app-release-unsigned.apk`) и на устройстве не
-   установится.
+   Без этого файла release-сборка падает на `:app:packageRelease` — `SigningConfig "release" is
+   missing required property "storeFile"`: в `app/build.gradle` release всегда подписывается
+   `signingConfigs.release`, а подпись хранится только локально. Чтобы проверить, что проект
+   собирается, используйте debug-вариант: `./gradlew assembleDebug`
+   (`android/app/build/outputs/apk/debug/app-debug.apk`).
 
 4. Готовый файл: `android/app/build/outputs/apk/release/app-release.apk`.
 5. Сначала создайте тег — `git push origin v<версия>` (например `v1.0.6`), — и только затем релиз на
@@ -261,4 +266,4 @@ chmod 600 .env.local
    описан в README репозитория лендинга.
 
 > Переменные окружения для терминала: `ANDROID_HOME`/`ANDROID_SDK_ROOT` — путь к Android SDK,
-> `JAVA_HOME` — путь к JDK 21. Сборка release на JDK 17 завершается ошибкой.
+> `JAVA_HOME` — путь к JDK 21: release-APK собирается только на нём.
