@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useData } from '../state/DataContext'
+import { useRoute } from '../router'
 import {
   MANUAL_STOCK_MOVE_KINDS,
   STOCK_MOVE_LABEL,
@@ -7,7 +8,8 @@ import {
   type StockMove,
 } from '../types'
 import { formatShortDate, plural } from '../utils/format'
-import { formatStockDelta, stockMoveTitle, stockMoveTone } from '../utils/stock'
+import { formatStockDelta, stockMoveOrder, stockMoveTitle, stockMoveTone } from '../utils/stock'
+import { Icon } from './Icons'
 import { Button, Field, Input, IntegerInput, cx } from './ui'
 
 // Учёт остатка: приход, расход, корректировка и вся история движения товара.
@@ -16,6 +18,7 @@ import { Button, Field, Input, IntegerInput, cx } from './ui'
 // Остаток и история всегда читаются из базы заново.
 export function StockPanel({ productId }: { productId: string }) {
   const { db, refresh } = useData()
+  const { navigate } = useRoute()
   const [kind, setKind] = useState<ManualStockMoveKind>('in')
   const [value, setValue] = useState('')
   const [comment, setComment] = useState('')
@@ -25,6 +28,8 @@ export function StockPanel({ productId }: { productId: string }) {
   if (!product) return null
 
   const moves = db.getStockMoves(productId)
+  // Заказы нужны истории: у списаний по заказу причина становится ссылкой на сам заказ.
+  const orders = db.getOrders()
 
   const amount = value.trim() === '' ? Number.NaN : Number(value)
   const preview = !Number.isFinite(amount)
@@ -125,24 +130,45 @@ export function StockPanel({ productId }: { productId: string }) {
         <div className="stock-history-empty">Движений пока не было</div>
       ) : (
         <div className="stock-history">
-          {moves.map((move) => (
-            <StockMoveRow key={move.id} move={move} />
-          ))}
+          {moves.map((move) => {
+            const order = stockMoveOrder(move, orders)
+            return (
+              <StockMoveRow
+                key={move.id}
+                move={move}
+                onOpenOrder={order ? () => navigate(`/orders/${order.id}`) : undefined}
+              />
+            )
+          })}
         </div>
       )}
     </div>
   )
 }
 
-// Одна строка истории: «19.09 +20 Поступление → 20».
-export function StockMoveRow({ move }: { move: StockMove }) {
+// Одна строка истории: «19.09 +20 Поступление → 20». Если движение привязано к заказу,
+// причина — кнопка: тап по «Заказ №42» открывает сам заказ (маршрут /orders/<id>).
+export function StockMoveRow({ move, onOpenOrder }: { move: StockMove; onOpenOrder?: () => void }) {
+  const title = stockMoveTitle(move)
   return (
     <div className="stock-move">
       <span className="stock-move-date">{formatShortDate(move.date)}</span>
       <span className={cx('stock-move-delta', `stock-move-${stockMoveTone(move.delta)}`)}>
         {formatStockDelta(move.delta)}
       </span>
-      <span className="stock-move-note">{stockMoveTitle(move)}</span>
+      {onOpenOrder ? (
+        <button
+          type="button"
+          className="stock-move-note stock-move-link"
+          title="Открыть заказ"
+          onClick={onOpenOrder}
+        >
+          <span className="stock-move-link-text">{title}</span>
+          <Icon name="chevron-right" size={14} />
+        </button>
+      ) : (
+        <span className="stock-move-note">{title}</span>
+      )}
       <span className="stock-move-after" title="Остаток после операции">
         {move.stockAfter}
       </span>

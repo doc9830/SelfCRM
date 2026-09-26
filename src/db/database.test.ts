@@ -452,6 +452,8 @@ describe('Database: история движения товара', () => {
     expect(moves[0].kind).toBe('order')
     expect(moves[0].note).toBe(`Заказ №${order.number}`)
     expect(moves[0].stockAfter).toBe(7)
+    // Связь с заказом: по ней история склада открывает сам заказ.
+    expect(moves[0].orderId).toBe(order.id)
   })
 
   it('при редактировании заказа пишет одно движение на разницу', () => {
@@ -497,7 +499,21 @@ describe('Database: история движения товара', () => {
     db.deleteOrder(order.id)
 
     expect(db.getProduct('p1')?.stock).toBe(10)
-    expect(db.getStockMoves('p1')[0].note).toBe(`Удаление заказа №${order.number}`)
+    const removal = db.getStockMoves('p1')[0]
+    expect(removal.note).toBe(`Удаление заказа №${order.number}`)
+    // Заказа в базе больше нет — ссылку вести некуда, поле остаётся пустым.
+    expect(removal.orderId).toBeUndefined()
+  })
+
+  it('в ручных движениях заказа нет', () => {
+    const { db } = setup()
+    db.saveProduct(makeProduct({ stock: 10 }))
+
+    db.applyStockMove({ productId: 'p1', kind: 'in', value: 5, comment: 'Поставщик' })
+
+    const move = db.getStockMoves('p1')[0]
+    expect(move.kind).toBe('in')
+    expect(move.orderId).toBeUndefined()
   })
 
   it('поддерживает приход, расход и корректировку', () => {

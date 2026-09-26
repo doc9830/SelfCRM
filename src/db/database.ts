@@ -394,11 +394,11 @@ export class Database {
     if (existing) {
       // Остаток пересчитывается по разнице версий заказа и одной записью в истории,
       // а не двумя («вернули старое» + «списали новое»).
-      this.applyOrderStock(existing, saved, note)
+      this.applyOrderStock(existing, saved, note, saved.id)
       Object.assign(existing, saved)
     } else {
       this.data.orders.push(saved)
-      this.applyOrderStock(null, saved, note)
+      this.applyOrderStock(null, saved, note, saved.id)
     }
     this.persist()
     return order
@@ -406,6 +406,8 @@ export class Database {
 
   deleteOrder(id: string): void {
     const existing = this.data.orders.find((o) => o.id === id)
+    // У удаления заказа связи нет: сам заказ в базе не остаётся, и вести ссылку некуда,
+    // поэтому в истории склада причина «Удаление заказа №42» остаётся обычным текстом.
     if (existing) this.applyOrderStock(existing, null, this.orderRemovalNote(existing))
     this.data.orders = this.data.orders.filter((o) => o.id !== id)
     this.persist()
@@ -504,7 +506,15 @@ export class Database {
   }
 
   // Изменение остатка с записью в историю товара. Услуги на складе не учитываются.
-  private applyStockDelta(productId: string, delta: number, kind: StockMoveKind, note: string): void {
+  // `orderId` — заказ, к которому привязано движение: по нему история склада открывает
+  // сам заказ (ссылка на «Заказ №42»).
+  private applyStockDelta(
+    productId: string,
+    delta: number,
+    kind: StockMoveKind,
+    note: string,
+    orderId?: string,
+  ): void {
     if (!delta) return
     const product = this.data.products.find((p) => p.id === productId)
     if (!product || isService(product)) return
@@ -519,18 +529,25 @@ export class Database {
       kind,
       note,
       stockAfter: product.stock,
+      // У ручных операций заказа нет — поле остаётся пустым и в файл не попадает.
+      orderId,
     })
   }
 
   // Остаток меняется на разницу между «до» и «после»: при редактировании заказа
   // в историю попадает одно движение, а не возврат и повторное списание.
-  private applyOrderStock(previous: Order | null, next: Order | null, note: string): void {
+  private applyOrderStock(
+    previous: Order | null,
+    next: Order | null,
+    note: string,
+    orderId?: string,
+  ): void {
     const before = previous ? this.committedQty(previous) : new Map<string, number>()
     const after = next ? this.committedQty(next) : new Map<string, number>()
     const productIds = new Set([...before.keys(), ...after.keys()])
     for (const productId of productIds) {
       const delta = (before.get(productId) ?? 0) - (after.get(productId) ?? 0)
-      this.applyStockDelta(productId, delta, 'order', note)
+      this.applyStockDelta(productId, delta, 'order', note, orderId)
     }
   }
 
