@@ -28,7 +28,7 @@ for (const word of ['светлый', 'темный']) {
     if (!response.ok) broken.push(`${file} (${word}).png → ${response.status}`)
   }
 }
-console.log(broken.length ? `НЕ НАЙДЕНЫ:\n${broken.join('\n')}` : 'все кадры на месте (44 файла)')
+console.log(broken.length ? `НЕ НАЙДЕНЫ:\n${broken.join('\n')}` : `все кадры на месте (${names.length * 2} файла)`)
 
 await page.close()
 browser.close()
