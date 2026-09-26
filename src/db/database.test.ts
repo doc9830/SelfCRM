@@ -184,6 +184,23 @@ describe('Database: резервные копии', () => {
     expect(second.getClients()).toHaveLength(1)
     expect(second.getClient('c1')?.name).toBe('Иван')
   })
+
+  it('принимает копию с BOM и пробелами по краям', () => {
+    const { db } = setup()
+    db.saveClient({ id: 'c1', name: 'Иван', phone: '', email: '', comment: '', createdAt: '' })
+
+    const second = new Database(new MemoryStore())
+    second.importData(`\uFEFF\n  ${db.exportData()}\n`)
+
+    expect(second.getClients()).toHaveLength(1)
+  })
+
+  it('не-JSON объясняет причину по-русски, а не сообщением JSON.parse', () => {
+    const { db } = setup()
+
+    expect(() => db.importData('это не JSON')).toThrow('Файл резервной копии не читается: это не JSON')
+    expect(() => db.importData('{"data": []}')).toThrow('Некорректный файл резервной копии')
+  })
 })
 
 describe('Database: сохранность данных', () => {

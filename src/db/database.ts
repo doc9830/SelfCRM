@@ -23,6 +23,7 @@ import {
   type ReminderEntry,
 } from '../utils/reminders'
 import { localStorageStore, type KVStore } from './kvstore'
+import { parseBackupJson } from './backupText'
 
 const STORAGE_KEY = 'selfcrm:data'
 const SCHEMA_VERSION = 1
@@ -50,6 +51,17 @@ function emptySnapshot(): DatabaseSnapshot {
     stockMoves: [],
     settings: { contractor: emptyContractor() },
   }
+}
+
+// Разбор текста резервной копии. Копия приходит файлом или из облака, а значит по пути
+// могла получить BOM и мусор по краям (см. db/backupText.ts); сообщение об ошибке должно
+// объяснять причину — техническое «Unexpected token» пользователю ничего не говорит.
+function parseSnapshot(json: string): DatabaseSnapshot {
+  const value = parseBackupJson(json)
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('Некорректный файл резервной копии')
+  }
+  return value as DatabaseSnapshot
 }
 
 export class Database {
@@ -627,8 +639,8 @@ export class Database {
   }
 
   importData(json: string): void {
-    const parsed = JSON.parse(json) as DatabaseSnapshot
-    if (!parsed || !Array.isArray(parsed.clients) || !Array.isArray(parsed.orders)) {
+    const parsed = parseSnapshot(json)
+    if (!Array.isArray(parsed.clients) || !Array.isArray(parsed.orders)) {
       throw new Error('Некорректный файл резервной копии')
     }
     // Импорт полностью заменяет базу, поэтому сначала сохраняем текущее состояние:
