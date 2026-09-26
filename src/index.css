@@ -844,6 +844,102 @@ button {
   font-weight: 700;
 }
 
+/* ---- «К оплате» ---- */
+
+/* Плашка на главном экране: компактная полоса под основными цифрами, по нажатию
+   открывается список долгов. Долг — не ошибка, поэтому цвет спокойный: акцент
+   появляется только у суммы. */
+.debt-panel {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  color: var(--text);
+  text-align: left;
+}
+
+.debt-panel:active {
+  transform: scale(0.99);
+}
+
+.debt-panel-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.debt-panel-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.debt-panel-value {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+/* Когда долгов нет, цифра не должна читаться как тревога. */
+.debt-panel-clear .debt-panel-value {
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.debt-panel-sub {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* Итог на экране «К оплате»: сколько осталось получить со всех заказов. */
+.debt-total {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 14px;
+  margin-bottom: 14px;
+  border-radius: var(--radius);
+  background: var(--warning-soft);
+  color: #92400e;
+}
+
+.debt-total-label {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.debt-total-value {
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.debt-total-sub {
+  font-size: 12.5px;
+}
+
+.debt-due {
+  font-weight: 700;
+  color: var(--warning);
+  white-space: nowrap;
+}
+
+.debt-due-label {
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
 .quick-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -2072,6 +2168,12 @@ button {
 
 :root[data-theme='dark'] .limit-banner,
 :root[data-theme='dark'] .warn-item {
+  color: #fde68a;
+}
+
+/* «К оплате»: на тёмной плашке коричневый текст не читается — берём светлый
+   оттенок того же предупреждающего цвета. */
+:root[data-theme='dark'] .debt-total {
   color: #fde68a;
 }
 

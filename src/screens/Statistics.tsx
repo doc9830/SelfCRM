@@ -3,8 +3,10 @@ import { Badge, Button, EmptyState, Field, Input, cx } from '../components/ui'
 import { useRoute } from '../router'
 import { useData } from '../state/DataContext'
 import { ORDER_STATUSES, ORDER_STATUS_LABEL } from '../types'
-import { formatDate, money, plural } from '../utils/format'
+import { money, plural } from '../utils/format'
 import { statisticsPeriodFromQuery } from '../utils/links'
+import { clientLabel, NO_CLIENT_ID } from '../utils/orders'
+import { rangeLabel } from '../reports/report'
 import { statusTone } from '../utils/status'
 import {
   filterOrdersByRange,
@@ -26,7 +28,7 @@ const PERIODS: Array<{ value: PeriodKey; label: string }> = [
   { value: 'custom', label: 'Период' },
 ]
 
-const NO_CLIENT = '__none__'
+const NO_CLIENT = NO_CLIENT_ID
 
 export function Statistics() {
   const { db, version } = useData()
@@ -37,6 +39,11 @@ export function Statistics() {
   )
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
+  // Состояние выгрузки: сборка файла асинхронная (её видно по кнопке), а результат
+  // объясняется текстом — «ничего не произошло» быть не должно.
+  const [exportBusy, setExportBusy] = useState(false)
+  const [exportError, setExportError] = useState('')
+  const [exportNote, setExportNote] = useState('')
 
   // Плашка «Выручка» на главном экране ведёт на #/statistics?period=month.
   useEffect(() => {
@@ -57,11 +64,55 @@ export function Statistics() {
     // version в зависимостях: пересчитываем статистику после изменений данных.
   }, [db, version, period, from, to])
 
-  const clientName = (id: string) => {
-    if (id === NO_CLIENT) return 'Без клиента'
-    const client = db.getClient(id)
-    if (!client) return 'Удалённый клиент'
-    return client.archived ? `${client.name} (архив)` : client.name
+  // Имя клиента — общая подпись (utils/orders.ts): то же имя попадёт в отчёт.
+  const clientName = (id: string) => clientLabel(id === NO_CLIENT ? undefined : db.getClient(id), id)
+
+  // Выгрузка: данные отчёта собираются по выбранному здесь периоду — тому же, что
+  // виден на экране. Модуль выгрузки подгружается по нажатию (в нём библиотека
+  // сборки .xlsx), а исходы объясняются текстом под кнопкой.
+  const exportExcel = () => {
+    if (exportBusy) return
+    setExportBusy(true)
+    setExportError('')
+    setExportNote('')
+    void import('../reports/export')
+      .then(({ exportReport }) =>
+        exportReport({
+          orders: db.getOrders(),
+          clients: db.getClients(true),
+          period,
+          custom: { from, to },
+        }),
+      )
+      .then(({ fileName, delivery }) => {
+        if (delivery.kind === 'native' || delivery.kind === 'shared') {
+          setExportNote('Файл готов — выберите, куда его сохранить или отправить.')
+          return
+        }
+        if (delivery.kind === 'downloaded') {
+          setExportNote(`${fileName} скачан в «Загрузки».`)
+          return
+        }
+        if (delivery.kind === 'cancelled') {
+          setExportNote('Отправка отменена — можно попробовать ещё раз.')
+          return
+        }
+        if (delivery.kind === 'unsupported') {
+          setExportError('В этой версии Telegram файл отдать нечем — откройте приложение в браузере.')
+          return
+        }
+        if (delivery.result.kind === 'opened') {
+          setExportNote('Отчёт уходит в «Загрузки» — файл откроется в Excel или таблицах.')
+          return
+        }
+        if (delivery.result.kind === 'copied') {
+          setExportNote('Ссылка на файл скопирована — откройте её в браузере, чтобы скачать отчёт.')
+          return
+        }
+        setExportError('Не удалось передать файл — попробуйте ещё раз.')
+      })
+      .catch((error) => setExportError(exportErrorMessage(error)))
+      .finally(() => setExportBusy(false))
   }
 
   return (
@@ -112,6 +163,32 @@ export function Statistics() {
           Себестоимость проданного: {money(summary.cost)}
         </div>
       )}
+
+      {/* Выгрузка в Excel за тот же период, что выбран чипами выше. */}
+      <div className="section" style={{ marginTop: 16 }}>
+        <Button
+          variant="outline"
+          icon="download"
+          full
+          disabled={exportBusy}
+          onClick={exportExcel}
+        >
+          {exportBusy ? 'Готовим файл…' : 'Экспорт в Excel'}
+        </Button>
+        <div className="field-hint" style={{ marginTop: 6 }}>
+          Пять листов: сводка, продажи, позиции, клиенты и товары за этот период
+        </div>
+        {exportNote && (
+          <div className="field-hint" style={{ marginTop: 6 }}>
+            {exportNote}
+          </div>
+        )}
+        {exportError && (
+          <div className="field-error" style={{ marginTop: 6 }}>
+            {exportError}
+          </div>
+        )}
+      </div>
 
       <div className="section">
         <div className="section-title" style={{ marginBottom: 10 }}>
@@ -189,13 +266,12 @@ export function Statistics() {
   )
 }
 
-function rangeLabel(bounds: DateRange): string {
-  const from = bounds.from !== null ? formatDate(new Date(bounds.from).toISOString()) : null
-  const to = bounds.to !== null ? formatDate(new Date(bounds.to).toISOString()) : null
-  if (from && to) return `Период: ${from} — ${to}`
-  if (from) return `Период: с ${from}`
-  if (to) return `Период: по ${to}`
-  return 'Период: за всё время'
+// Сообщение об ошибке выгрузки. Свои сообщения (мост, доставка) написаны
+// по-русски и объясняют причину; всё остальное — технический текст библиотек и сети,
+// который пользователю ничего не говорит, поэтому заменяется понятной фразой.
+function exportErrorMessage(error: unknown): string {
+  const text = error instanceof Error ? error.message : ''
+  return /[А-Яа-я]/.test(text) ? text : 'Не удалось собрать отчёт — попробуйте ещё раз.'
 }
 
 function Stat({

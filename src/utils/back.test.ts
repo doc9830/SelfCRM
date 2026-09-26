@@ -26,6 +26,10 @@ describe('headerBackTarget — куда ведёт стрелочка в шап�
     expect(headerBackTarget(route('/statistics?period=month'))).toBe('/')
   })
 
+  it('со списка «К оплате» — на главную', () => {
+    expect(headerBackTarget(route('/debt'))).toBe('/')
+  })
+
   it('с обратной связи — в настройки', () => {
     expect(headerBackTarget(route('/feedback'))).toBe('/settings')
     expect(headerBackTarget(route('/feedback?topic=bug'))).toBe('/settings')

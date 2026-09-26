@@ -21,7 +21,8 @@
     "@capacitor/status-bar": "^8.0.3",
     "pdfmake": "^0.3.11",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "write-excel-file": "^4.1.1"
   },
   "devDependencies": {
     "@capacitor/android": "^8.5.1",

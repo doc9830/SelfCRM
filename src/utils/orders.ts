@@ -4,7 +4,7 @@
 // присваивается в `Database.createOrderDraft()` и больше не меняется — даже если
 // пользователь поправит дату заказа. По номеру заказ находят в чеке, в переписке
 // с клиентом и в истории склада («Заказ №42»).
-import type { Order, OrderItem, OrderStatus } from '../types'
+import type { Client, Order, OrderItem, OrderStatus } from '../types'
 import { formatDate } from './format'
 
 function hasNumber(order: Order): boolean {
@@ -48,6 +48,19 @@ export function orderTitle(order: Order): string {
 // «Заказ №42 от 19.09.2026» — шапка карточки заказа и PDF-чека.
 export function orderHeading(order: Order): string {
   return `${orderTitle(order)} от ${formatDate(order.date)}`
+}
+
+// Ключ заказов без клиента. Заказ может быть оформлен без клиента («без карточки»),
+// и в статистике такие заказы собираются в одну строку — по этому ключу.
+export const NO_CLIENT_ID = '__none__'
+
+// Имя клиента для списка, статистики и отчёта: идентификатора в интерфейсе быть не
+// должно, а заказ бывает без клиента, карточку клиента могли удалить или убрать в
+// архив. Об этом список говорит словами — одинаково на экране и в Excel.
+export function clientLabel(client: Client | undefined, clientId: string | null): string {
+  if (!clientId || clientId === NO_CLIENT_ID) return 'Без клиента'
+  if (!client) return 'Удалённый клиент'
+  return client.archived ? `${client.name} (архив)` : client.name
 }
 
 // Повторить заказ можно только у законченной сделки — завершённой или отменённой.

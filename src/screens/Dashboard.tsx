@@ -3,8 +3,9 @@ import { useData } from '../state/DataContext'
 import { isActiveStatus, isService, type Order } from '../types'
 import { Button, EmptyState, cx } from '../components/ui'
 import { money, plural } from '../utils/format'
-import { ACTIVE_ORDERS_LINK, statisticsLink } from '../utils/links'
+import { ACTIVE_ORDERS_LINK, DEBT_LINK, statisticsLink } from '../utils/links'
 import { orderTitle } from '../utils/orders'
+import { dueSummary } from '../utils/payments'
 import {
   REMINDER_KIND_ICON,
   groupReminders,
@@ -31,6 +32,10 @@ export function Dashboard() {
   // Выручка — завершённые заказы текущего месяца: на этот же период ведёт плашка.
   const month = summarizeOrders(filterOrdersByRange(orders, periodRange('month')))
   const lowStock = products.filter((p) => !isService(p) && p.stock <= p.minStock)
+
+  // К оплате: заказы, по которым осталось внести деньги. Считается той же формулой,
+  // что в карточке заказа и в Excel-отчёте, — иначе плашка и заказ расходились бы.
+  const due = dueSummary(orders)
 
   // Ближайшие напоминания из всех заказов: на главной это компактный обзор, сами
   // напоминания живут в карточках заказов — отдельного планировщика нет.
@@ -72,6 +77,29 @@ export function Dashboard() {
             onClick={() => navigate(statisticsLink('month'))}
           />
         </div>
+      )}
+
+      {/* Плашка «К оплате»: компактная и вторичная по отношению к основным цифрам,
+          поэтому стоит под ними, но перед напоминаниями — долги важнее планов. */}
+      {!isFirstRun && (
+        <button
+          className={cx('debt-panel', due.count === 0 && 'debt-panel-clear')}
+          onClick={() => navigate(DEBT_LINK)}
+        >
+          <span className="debt-panel-main">
+            <span className="debt-panel-label">
+              <Icon name="wallet" size={15} />
+              К оплате
+            </span>
+            <span className="debt-panel-value">{money(due.total)}</span>
+            <span className="debt-panel-sub">
+              {due.count === 0
+                ? 'Нет неоплаченных заказов'
+                : `${due.count} ${plural(due.count, 'заказ', 'заказа', 'заказов')} с остатком`}
+            </span>
+          </span>
+          <Icon name="chevron-right" size={16} />
+        </button>
       )}
 
       {/* Напоминания идут под плашками: цифры читаются первыми, а список может быть длинным. */}

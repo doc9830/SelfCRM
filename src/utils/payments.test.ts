@@ -3,8 +3,10 @@ import type { Order } from '../types'
 import {
   PAYMENT_STATUS_LABEL,
   addPayment,
+  dueSummary,
   orderPaid,
   orderPaymentState,
+  ordersWithDue,
   paymentState,
   remainingToPay,
   removePayment,
@@ -93,5 +95,57 @@ describe('платежи по заказу', () => {
     delete order.payments
     expect(orderPaid(order)).toBe(0)
     expect(remainingToPay(order)).toBe(300)
+  })
+})
+
+describe('«К оплате» — список долгов', () => {
+  const paid = (amount: number) => ({ id: `p-${amount}`, amount, date: new Date(2026, 8, 20, 12).toISOString(), comment: '' })
+
+  it('без долгов список пуст', () => {
+    const order = makeOrder({ payments: [paid(300)] })
+    expect(ordersWithDue([order])).toEqual([])
+    expect(dueSummary([order])).toEqual({ total: 0, count: 0, entries: [] })
+  })
+
+  it('полностью неоплаченный заказ — это долг на всю сумму', () => {
+    const summary = dueSummary([makeOrder()])
+    expect(summary.total).toBe(300)
+    expect(summary.count).toBe(1)
+    expect(summary.entries[0].state.remaining).toBe(300)
+  })
+
+  it('частичная оплата уменьшает долг', () => {
+    const summary = dueSummary([makeOrder({ payments: [paid(100)] })])
+    expect(summary.total).toBe(200)
+  })
+
+  it('несколько платежей складываются', () => {
+    const order = makeOrder({ payments: [paid(100), paid(150)] })
+    expect(dueSummary([order]).total).toBe(50)
+  })
+
+  it('переплата долга не создаёт', () => {
+    const summary = dueSummary([makeOrder({ payments: [paid(400)] })])
+    expect(summary.total).toBe(0)
+    expect(summary.count).toBe(0)
+  })
+
+  it('отменённый заказ долгом не считается', () => {
+    const summary = dueSummary([makeOrder({ status: 'cancelled' })])
+    expect(summary.count).toBe(0)
+  })
+
+  it('несколько заказов: сначала самые большие долги, при равенстве — старые', () => {
+    const big = makeOrder({
+      id: 'big',
+      items: [{ productId: null, name: 'Работа', price: 1000, qty: 1 }],
+      date: new Date(2026, 8, 25, 12).toISOString(),
+    })
+    const old = makeOrder({ id: 'old', date: new Date(2026, 8, 1, 12).toISOString() })
+    const young = makeOrder({ id: 'young', date: new Date(2026, 8, 20, 12).toISOString() })
+    const summary = dueSummary([old, big, young])
+    expect(summary.total).toBe(1600)
+    expect(summary.count).toBe(3)
+    expect(summary.entries.map((entry) => entry.order.id)).toEqual(['big', 'old', 'young'])
   })
 })

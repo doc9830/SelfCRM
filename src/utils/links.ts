@@ -23,6 +23,10 @@ export const ORDER_FILTER_LABEL: Record<OrderFilter, string> = {
 // Ссылки для плашек на главном экране.
 export const ACTIVE_ORDERS_LINK = '/orders?filter=active'
 
+// «К оплате»: заказы, по которым осталось внести деньги. Плашка на главном экране
+// ведёт на этот список, а строки списка — в обычную карточку заказа.
+export const DEBT_LINK = '/debt'
+
 export function statisticsLink(period: PeriodKey): string {
   return `/statistics?period=${period}`
 }

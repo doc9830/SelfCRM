@@ -1,13 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import type { Order } from '../types'
+import type { Client, Order } from '../types'
 import {
   applyOrderForm,
   assignMissingNumbers,
   canRepeatOrder,
+  clientLabel,
   formatOrderNumber,
   nextOrderNumber,
   orderHeading,
   orderTitle,
+  NO_CLIENT_ID,
 } from './orders'
 
 function makeOrder(partial: Partial<Order> = {}): Order {
@@ -123,5 +125,26 @@ describe('сборка заказа из формы', () => {
 
     expect(saved.payments).toEqual([])
     expect(saved.reminders).toEqual([])
+  })
+})
+
+describe('clientLabel — как клиент подписан в списках и отчёте', () => {
+  const client = { id: 'c1', name: 'Иванов Иван', archived: false }
+
+  it('обычный клиент — по имени', () => {
+    expect(clientLabel(client as Client, 'c1')).toBe('Иванов Иван')
+  })
+
+  it('архивный клиент помечен', () => {
+    expect(clientLabel({ ...client, archived: true } as Client, 'c1')).toBe('Иванов Иван (архив)')
+  })
+
+  it('заказ без клиента подписан словами', () => {
+    expect(clientLabel(undefined, null)).toBe('Без клиента')
+    expect(clientLabel(undefined, NO_CLIENT_ID)).toBe('Без клиента')
+  })
+
+  it('удалённый клиент не превращается в пустую строку', () => {
+    expect(clientLabel(undefined, 'gone')).toBe('Удалённый клиент')
   })
 })

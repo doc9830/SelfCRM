@@ -29,6 +29,9 @@ export function headerBackTarget(route: Route): string | null {
       return seg[1] ? STOCK_PATH : null
     case 'statistics':
       return HOME_PATH
+    case 'debt':
+      // Список «К оплате» открывается с главного экрана — туда и возвращаемся.
+      return HOME_PATH
     case 'feedback':
       // Обратная связь открывается из настроек — туда и возвращаемся.
       return SETTINGS_PATH

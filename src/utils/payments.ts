@@ -59,6 +59,50 @@ export function remainingToPay(order: Order): number {
   return orderPaymentState(order).remaining
 }
 
+// Заказ с остатком к оплате: сам заказ и его состояние платежей. Список «К оплате»
+// на главном экране и лист «Сводка» отчёта показывают одни и те же числа.
+export interface DueEntry {
+  order: Order
+  state: PaymentState
+}
+
+export interface DueSummary {
+  // Общая сумма задолженности по всем заказам.
+  total: number
+  count: number
+  entries: DueEntry[]
+}
+
+// Заказы, по которым осталось внести деньги: неоплаченные и частично оплаченные.
+//
+// Отменённые заказы долгом не считаются: работа по ним не выполняется (в статистике
+// они так же не попадают ни в выручку, ни в прибыль). Полностью оплаченные заказы
+// выпадают сами — остаток у них ноль, а формула остатка одна на всё приложение
+// (`paymentState`).
+export function ordersWithDue(orders: Order[]): DueEntry[] {
+  return orders
+    .filter((order) => order.status !== 'cancelled')
+    .map((order) => ({ order, state: orderPaymentState(order) }))
+    .filter((entry) => entry.state.remaining > 0)
+    // Сначала самые большие долги; при равной сумме — более старые заказы: они
+    // ждут оплаты дольше.
+    .sort(
+      (a, b) =>
+        b.state.remaining - a.state.remaining ||
+        new Date(a.order.date).getTime() - new Date(b.order.date).getTime(),
+    )
+}
+
+// Сколько всего должны и сколько это заказов.
+export function dueSummary(orders: Order[]): DueSummary {
+  const entries = ordersWithDue(orders)
+  return {
+    total: round2(entries.reduce((sum, entry) => sum + entry.state.remaining, 0)),
+    count: entries.length,
+    entries,
+  }
+}
+
 // Возвращает копию заказа с добавленным платежом.
 export function addPayment(
   order: Order,

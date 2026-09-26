@@ -5,6 +5,7 @@ import { useRoute } from './router'
 import { ClientDetail } from './screens/ClientDetail'
 import { Clients } from './screens/Clients'
 import { Dashboard } from './screens/Dashboard'
+import { Debts } from './screens/Debts'
 import { Feedback } from './screens/Feedback'
 import { OrderDetail } from './screens/OrderDetail'
 import { Orders } from './screens/Orders'
@@ -101,6 +102,14 @@ function renderScreen() {
       return (
         <Layout title="Статистика">
           <Statistics />
+        </Layout>
+      )
+
+    case 'debt':
+      // Список долгов: плашка «К оплате» на главном экране ведёт сюда.
+      return (
+        <Layout title="К оплате">
+          <Debts />
         </Layout>
       )
 
