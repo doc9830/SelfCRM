@@ -192,12 +192,62 @@ function embeddedHost(): OpenLinkHost | null {
 // на текущей странице, во встроенный браузер мессенджера или никуда.
 export type MailtoTarget = 'system' | 'app' | 'embedded' | 'failed'
 
+// Страница-мост для mailto (public/mailto.html). Клиент мессенджера отдаёт её системному
+// браузеру, а браузер уже передаёт письмо почтовой программе: сам `mailto:` клиент
+// принимать отказывается — нажатие выглядит как «ничего не произошло».
+const MAILTO_BRIDGE_PAGE = 'mailto.html'
+
+export interface MailtoParts {
+  to: string
+  subject: string
+  body: string
+}
+
+// Разбирает готовую mailto-ссылку на части: их принимает страница-мост, чтобы показать
+// адрес и текст письма, если почтовая программа не открылась.
+export function mailtoParts(mailto: string): MailtoParts | null {
+  try {
+    const url = new URL(mailto)
+    if (url.protocol !== 'mailto:') return null
+    return {
+      to: decodeURIComponent(url.pathname),
+      subject: url.searchParams.get('subject') ?? '',
+      body: url.searchParams.get('body') ?? '',
+    }
+  } catch {
+    return null
+  }
+}
+
+// Адрес страницы-моста собирается от текущего адреса приложения, поэтому работает и на
+// GitHub Pages, и при любой другой раздаче. null — собрать не удалось (нет окна или
+// ссылка не mailto): тогда остаётся обычный mailto, как было раньше.
+export function mailtoBridgeUrl(mailto: string): string | null {
+  if (typeof window === 'undefined' || !window.location) return null
+  const parts = mailtoParts(mailto)
+  if (!parts) return null
+  try {
+    const page = new URL(MAILTO_BRIDGE_PAGE, window.location.href)
+    // У адреса приложения свой хеш-маршрут («#/feedback») и параметры: они мосту не нужны.
+    page.hash = ''
+    page.search = ''
+    page.searchParams.set('to', parts.to)
+    page.searchParams.set('subject', parts.subject)
+    page.searchParams.set('body', parts.body)
+    return page.toString()
+  } catch {
+    return null
+  }
+}
+
 export function openMailto(url: string): MailtoTarget {
   if (typeof window === 'undefined') return 'failed'
 
   const host = embeddedHost()
   if (host?.openLink) {
-    host.openLink(url)
+    // Отдаём клиенту не mailto, а страницу-мост: её он открывает в системном браузере,
+    // и уже браузер открывает почтовую программу.
+    host.openLink(mailtoBridgeUrl(url) ?? url)
     return 'embedded'
   }
 

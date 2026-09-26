@@ -12,6 +12,8 @@ import {
   feedbackMailto,
   feedbackMessageError,
   feedbackSubject,
+  mailtoBridgeUrl,
+  mailtoParts,
   openMailto,
   platformLabel,
   type FeedbackDiagnostics,
@@ -161,6 +163,51 @@ describe('collectDiagnostics', () => {
   })
 })
 
+// Страница-мост: клиент мессенджера отдаёт браузеру её, а браузер — уже почтовой программе.
+describe('mailtoBridgeUrl', () => {
+  it('собирает адрес страницы-моста рядом с приложением', () => {
+    vi.stubGlobal('window', {
+      location: { href: 'https://doc9830.github.io/selfcrm-tg/#/feedback?topic=bug' },
+    })
+
+    const url = new URL(String(mailtoBridgeUrl('mailto:doc9830@proton.me?subject=Ошибка&body=Текст')))
+
+    expect(`${url.origin}${url.pathname}`).toBe('https://doc9830.github.io/selfcrm-tg/mailto.html')
+    expect(url.searchParams.get('to')).toBe('doc9830@proton.me')
+    expect(url.searchParams.get('subject')).toBe('Ошибка')
+    expect(url.searchParams.get('body')).toBe('Текст')
+  })
+
+  it('без окна и без адреса страницы мост собрать нельзя', () => {
+    vi.stubGlobal('window', undefined)
+    expect(mailtoBridgeUrl('mailto:a@b')).toBeNull()
+
+    vi.stubGlobal('window', { location: {} })
+    expect(mailtoBridgeUrl('mailto:a@b')).toBeNull()
+  })
+
+  it('для ссылок не-mailto мост не строится', () => {
+    vi.stubGlobal('window', { location: { href: 'https://doc9830.github.io/selfcrm-tg/' } })
+    expect(mailtoBridgeUrl('https://example.com/')).toBeNull()
+    expect(mailtoParts('tel:+70000000000')).toBeNull()
+    expect(mailtoParts('не ссылка')).toBeNull()
+  })
+})
+
+describe('mailtoParts', () => {
+  it('разбирает адрес, тему и текст письма', () => {
+    expect(mailtoParts('mailto:a@b?subject=Тема&body=Первая%0AВторая')).toEqual({
+      to: 'a@b',
+      subject: 'Тема',
+      body: 'Первая\nВторая',
+    })
+  })
+
+  it('без темы и текста отдаёт пустые строки', () => {
+    expect(mailtoParts('mailto:a@b')).toEqual({ to: 'a@b', subject: '', body: '' })
+  })
+})
+
 describe('openMailto и платформа', () => {
   it('без окна (проверки, серверный рендер) открыть письмо нечем', () => {
     expect(openMailto('mailto:a@b')).toBe('failed')
@@ -185,7 +232,24 @@ describe('openMailto и платформа', () => {
     expect(platformLabel()).toBe('Android (приложение)')
   })
 
-  it('во встроенном WebView мессенджера отдаёт ссылку его API', () => {
+  it('во встроенном WebView мессенджера открывает страницу-мост, а не mailto', () => {
+    const openLink = vi.fn()
+    vi.stubGlobal('window', {
+      Telegram: { WebApp: { openLink, initData: 'query_id=AAF&user=%7B%7D' } },
+      location: { href: 'https://doc9830.github.io/selfcrm-tg/#/feedback' },
+    })
+    expect(openMailto('mailto:a@b?subject=Тема')).toBe('embedded')
+    expect(openLink).toHaveBeenCalledTimes(1)
+
+    const url = new URL(String(openLink.mock.calls[0][0]))
+    expect(`${url.origin}${url.pathname}`).toBe('https://doc9830.github.io/selfcrm-tg/mailto.html')
+    expect(url.searchParams.get('to')).toBe('a@b')
+    expect(url.searchParams.get('subject')).toBe('Тема')
+    expect(url.hash).toBe('')
+    expect(platformLabel()).toBe('Telegram (мини-приложение)')
+  })
+
+  it('без адреса приложения отдаёт клиенту обычную mailto-ссылку', () => {
     const openLink = vi.fn()
     vi.stubGlobal('window', {
       Telegram: { WebApp: { openLink, initData: 'query_id=AAF&user=%7B%7D' } },
@@ -193,7 +257,6 @@ describe('openMailto и платформа', () => {
     })
     expect(openMailto('mailto:a@b')).toBe('embedded')
     expect(openLink).toHaveBeenCalledWith('mailto:a@b')
-    expect(platformLabel()).toBe('Telegram (мини-приложение)')
   })
 
   it('клиент назвал себя платформой — тоже мини-приложение', () => {

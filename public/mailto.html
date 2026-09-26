@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Письмо в SelfCRM</title>
+    <!--
+      Страница-мост для обратной связи (public/mailto.html).
+
+      Зачем она нужна. Приложение собирает письмо и отдаёт его mailto-ссылкой. В браузере и
+      в Android-приложении этого достаточно, а встроенный WebView мессенджера (Telegram Mini
+      App) внешние приложения по такой ссылке не открывает: `openLink('mailto:…')`
+      игнорируется, и нажатие выглядит как «ничего не произошло».
+
+      Поэтому мини-приложение открывает в системном браузере эту страницу, а она передаёт
+      письмо почтовой программе. Браузер — уже не WebView: `mailto:` здесь работает, и
+      открывается именно почтовое приложение пользователя.
+
+      Страница ничего не отправляет и не хранит: адрес, тема и текст письма приходят в
+      параметрах адреса и живут только в этой вкладке.
+
+      Если браузер не даёт открыть почтовую программу без нажатия (так делают Safari и
+      Firefox), остаётся кнопка «Открыть письмо» — нажатие пользователя уже есть. Рядом
+      ссылки на веб-почту: они нужны тем, у кого почтовой программы на устройстве нет.
+    -->
+    <style>
+      :root {
+        --bg: #f4f5f7;
+        --surface: #ffffff;
+        --border: #e6e8ec;
+        --text: #111827;
+        --text-muted: #6b7280;
+        --primary: #2563eb;
+        --primary-strong: #1d4ed8;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #0f172a;
+          --surface: #16203a;
+          --border: #24314f;
+          --text: #f1f5f9;
+          --text-muted: #9aa8bd;
+        }
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100dvh;
+        display: flex;
+        justify-content: center;
+        padding: 24px 16px;
+        background: var(--bg);
+        color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue',
+          Arial, sans-serif;
+        font-size: 15px;
+        line-height: 1.45;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      main {
+        width: 100%;
+        max-width: 560px;
+      }
+
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        box-shadow: 0 1px 2px rgba(16, 24, 40, 0.06), 0 1px 3px rgba(16, 24, 40, 0.08);
+        padding: 16px;
+      }
+
+      .mark {
+        width: 40px;
+        height: 40px;
+        border-radius: 11px;
+        background: var(--primary);
+        color: #fff;
+        font-size: 25px;
+        font-weight: 700;
+        line-height: 40px;
+        text-align: center;
+        margin-bottom: 12px;
+      }
+
+      h1 {
+        font-size: 18px;
+        margin: 0 0 6px;
+      }
+
+      p {
+        margin: 0 0 12px;
+        color: var(--text-muted);
+        font-size: 13.5px;
+      }
+
+      dl {
+        margin: 0 0 12px;
+        font-size: 13.5px;
+      }
+
+      dt {
+        color: var(--text-muted);
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        margin-top: 8px;
+      }
+
+      dd {
+        margin: 2px 0 0;
+        word-break: break-word;
+      }
+
+      pre {
+        margin: 0;
+        padding: 12px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: var(--bg);
+        font-family: inherit;
+        font-size: 13.5px;
+        white-space: pre-wrap;
+        word-break: break-word;
+        max-height: 45dvh;
+        overflow: auto;
+      }
+
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 14px;
+      }
+
+      button,
+      .link {
+        flex: 1 1 auto;
+        padding: 10px 14px;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        background: var(--surface);
+        color: var(--text);
+        font-family: inherit;
+        font-size: 14px;
+        font-weight: 600;
+        text-align: center;
+        text-decoration: none;
+        cursor: pointer;
+      }
+
+      button.primary {
+        background: var(--primary);
+        border-color: var(--primary);
+        color: #fff;
+      }
+
+      button.primary:active {
+        background: var(--primary-strong);
+      }
+
+      .webmail {
+        margin-top: 16px;
+        font-size: 13px;
+        color: var(--text-muted);
+      }
+
+      .webmail .links {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 8px;
+      }
+
+      .webmail .link {
+        flex: 0 1 auto;
+        font-weight: 500;
+        font-size: 13px;
+        padding: 8px 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="card">
+        <div class="mark" aria-hidden="true">S</div>
+        <h1>Письмо SelfCRM</h1>
+        <p id="hint">
+          Открываем почтовую программу. Если она не открылась — нажмите «Открыть письмо» или
+          отправьте текст письма вручную.
+        </p>
+
+        <dl>
+          <dt>Кому</dt>
+          <dd id="to">—</dd>
+          <dt>Тема</dt>
+          <dd id="subject">—</dd>
+        </dl>
+
+        <pre id="body"></pre>
+
+        <div class="actions">
+          <button class="primary" id="open" type="button">Открыть письмо</button>
+          <button id="copy" type="button">Скопировать текст</button>
+        </div>
+
+        <div class="webmail">
+          Почтовая программа не установлена? Напишите с веб-почты:
+          <div class="links">
+            <a class="link" id="gmail" href="#" rel="noreferrer noopener">Gmail</a>
+            <a class="link" id="yandex" href="#" rel="noreferrer noopener">Яндекс.Почта</a>
+            <a class="link" id="mailru" href="#" rel="noreferrer noopener">Mail.ru</a>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <script>
+      // Параметры адреса: получатель, тема и текст письма (см. mailtoBridgeUrl в
+      // src/utils/feedback.ts). Данные никуда не отправляются: они пришли в ссылке и
+      // живут только в этой вкладке.
+      const params = new URLSearchParams(window.location.search)
+      const to = params.get('to') || ''
+      const subject = params.get('subject') || ''
+      const body = params.get('body') || ''
+
+      // Текст для копирования: адрес и тема уже подставлены в письмо, поэтому в буфер
+      // попадает то, что иначе пришлось бы печатать руками.
+      const letter = [`Кому: ${to}`, `Тема: ${subject}`, '', body].join('\n')
+
+      const mailto = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(
+        subject,
+      )}&body=${encodeURIComponent(body)}`
+
+      const setText = (id, text) => {
+        const node = document.getElementById(id)
+        if (node) node.textContent = text
+      }
+
+      // Кнопка нужна, когда браузер не открывает почтовую программу сам: нажатие — это
+      // действие пользователя, которого Safari и Firefox и требуют.
+      const open = document.getElementById('open')
+      if (open) open.addEventListener('click', () => window.location.assign(mailto))
+
+      const copy = document.getElementById('copy')
+      if (copy) {
+        copy.addEventListener('click', async () => {
+          let done = false
+          try {
+            await navigator.clipboard.writeText(letter)
+            done = true
+          } catch {
+            // Ниже — запасной способ: Clipboard API отказывает без разрешения.
+          }
+          if (!done) {
+            const area = document.createElement('textarea')
+            area.value = letter
+            area.setAttribute('readonly', '')
+            area.style.position = 'fixed'
+            area.style.top = '-1000px'
+            document.body.appendChild(area)
+            area.select()
+            try {
+              done = document.execCommand('copy')
+            } catch {
+              done = false
+            }
+            document.body.removeChild(area)
+          }
+          copy.textContent = done ? 'Скопировано' : 'Выделите текст вручную'
+          window.setTimeout(() => {
+            copy.textContent = 'Скопировать текст'
+          }, 2000)
+        })
+      }
+
+      // Веб-почта: тот же текст письма, но отправить его можно из браузера.
+      const webmail = (id, url) => {
+        const link = document.getElementById(id)
+        if (!link) return
+        link.href = url
+        link.target = '_blank'
+      }
+      const compose = (to, subject, body) =>
+        `to=${encodeURIComponent(to)}&subject=${encodeURIComponent(
+          subject,
+        )}&body=${encodeURIComponent(body)}`
+
+      setText('to', to || '—')
+      setText('subject', subject || '—')
+      setText('body', body)
+      // У Gmail свои имена параметров и путь compose, у Яндекс.Почты и Mail.ru — общие.
+      webmail(
+        'gmail',
+        `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(
+          to,
+        )}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`,
+      )
+      webmail('yandex', `https://mail.yandex.ru/compose?${compose(to, subject, body)}`)
+      webmail('mailru', `https://e.mail.ru/compose/?${compose(to, subject, body)}`)
+
+      // Пробуем отдать письмо системе сразу: в большинстве браузеров это работает, и
+      // пользователь видит почтовую программу с готовым письмом.
+      if (to) window.location.replace(mailto)
+    </script>
+  </body>
+</html>
