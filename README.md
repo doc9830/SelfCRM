@@ -8,7 +8,7 @@
 
 **Как попробовать:**
 
-- **Android** — скачать APK со [страницы релизов](https://github.com/doc9830/SelfCRM/releases) и открыть файл: 1.7.1, около 4 МБ;
+- **Android** — скачать APK со [страницы релизов](https://github.com/doc9830/SelfCRM/releases) и открыть файл: 1.8.2, около 4 МБ;
 - **Telegram** — [@fastcrm_bot](https://t.me/fastcrm_bot) → «Открыть SelfCRM»: то же приложение прямо в мессенджере, без установки;
 - **Страница проекта** — https://doc9830.github.io/SelfCRMlanding/;
 - **Исходный код** — доступен на GitHub ([source available](./LICENSE): код можно читать и собирать для себя, свободная лицензия не выдаётся).
@@ -195,7 +195,7 @@ npm run dev        # запуск в браузере
 npm run build      # production-сборка в dist/
 npm test           # тесты
 npm run typecheck  # проверка типов
-npm run bump -- 1.8.1  # поднять версию сразу в package.json, src/version.ts и build.gradle
+npm run bump -- 1.8.2  # поднять версию сразу в package.json, src/version.ts и build.gradle
 ```
 
 Ключ подсказок адресов (Дадата) в исходниках не хранится: положите `VITE_DADATA_TOKEN=...`
