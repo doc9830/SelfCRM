@@ -1,4 +1,4 @@
-// Куда отдать готовый отчёт.
+// Куда отдать готовый файл (отчёт в Excel, прайс-лист в PDF).
 //
 // Способ выбирается по возможностям клиента, а не по названию системы:
 //   1. 'native' — сборка Capacitor: файл пишется на устройство и уходит системным
@@ -20,6 +20,10 @@ import { Share } from '@capacitor/share'
 // Тип файла отчёта: по нему система и Telegram понимают, что скачивают таблицу.
 export const REPORT_XLSX_TYPE =
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+
+// Тип PDF-документа: тем же путём уходит не только таблица, но и прайс-лист —
+// тип файла приходит от того, кто его собрал.
+export const REPORT_PDF_TYPE = 'application/pdf'
 
 export type ReportDeliveryPlan = 'native' | 'bridge' | 'file-share' | 'file-download'
 
@@ -74,15 +78,19 @@ export interface ReportFileInput {
   fileName: string
   // Подпись файла: её показывает системное меню и сообщение в чате.
   message: string
+  // Тип файла. Не задан — значит выгружается таблица отчёта: так экран статистики
+  // не знает о других документах, а прайс-лист передаёт 'application/pdf'.
+  type?: string
 }
 
 // Отдаёт готовый отчёт пользователю. Выбор пути — здесь, поэтому экран статистики
 // не знает ни про WebView клиента Telegram, ни про системные меню.
 export async function deliverReportFile(input: ReportFileInput): Promise<ReportDeliveryResult> {
+  const type = input.type ?? REPORT_XLSX_TYPE
   const plan = planReportDelivery({
     native: Capacitor.isNativePlatform(),
     bridge: platformBridge !== null,
-    canShareFiles: canShareFiles(),
+    canShareFiles: canShareFiles(type),
   })
 
   if (plan === 'bridge') {
@@ -96,7 +104,7 @@ export async function deliverReportFile(input: ReportFileInput): Promise<ReportD
     return { kind: 'native' }
   }
 
-  const file = new File([input.blob], input.fileName, { type: REPORT_XLSX_TYPE })
+  const file = new File([input.blob], input.fileName, { type })
 
   if (plan === 'file-share') {
     const target = await shareFile(file, input.message)
@@ -112,12 +120,13 @@ export async function deliverReportFile(input: ReportFileInput): Promise<ReportD
 }
 
 // Поддержка «Поделиться с файлом» проверяется пробным файлом: `canShare` отвечает
-// не по названию платформы, а по факту — умеет ли клиент отдать именно таблицу.
-export function canShareFiles(): boolean {
+// не по названию платформы, а по факту — умеет ли клиент отдать именно такой файл.
+export function canShareFiles(type: string = REPORT_XLSX_TYPE): boolean {
   if (typeof navigator === 'undefined' || typeof File === 'undefined') return false
   if (typeof navigator.share !== 'function' || typeof navigator.canShare !== 'function') return false
   try {
-    const probe = new File(['xlsx'], 'report.xlsx', { type: REPORT_XLSX_TYPE })
+    const name = type === REPORT_PDF_TYPE ? 'document.pdf' : 'report.xlsx'
+    const probe = new File(['file'], name, { type })
     return navigator.canShare({ files: [probe] })
   } catch {
     return false

@@ -15,6 +15,7 @@ import type {
 import { STOCK_MOVE_LABEL, emptyContractor, isService } from '../types'
 import { round2 } from '../utils/format'
 import { uid } from '../utils/id'
+import { normalizeClientTags } from '../utils/clients'
 import { assignMissingNumbers, formatOrderNumber, nextOrderNumber, orderTitle } from '../utils/orders'
 import {
   reminderHintText,
@@ -247,8 +248,15 @@ export class Database {
     return key ? this.store.getItem(key) : null
   }
 
+  // Копия клиента: теги нормализуются (без пустых значений и повторов), поэтому в базе
+  // и на экранах подписи всегда одинаковые. Пустой список тегов не хранится: поле
+  // убирается — «нет тегов» и «теги не заданы» не должны различаться.
   private cloneClient(c: Client): Client {
-    return { ...c }
+    const clone = { ...c }
+    const tags = normalizeClientTags(clone.tags)
+    if (tags.length) clone.tags = tags
+    else delete clone.tags
+    return clone
   }
 
   private cloneProduct(p: Product): Product {
@@ -289,10 +297,16 @@ export class Database {
 
   saveClient(client: Client): Client {
     const existing = this.data.clients.find((c) => c.id === client.id)
+    const next = this.cloneClient({
+      ...client,
+      createdAt: client.createdAt || new Date().toISOString(),
+    })
     if (existing) {
-      Object.assign(existing, client)
+      Object.assign(existing, next)
+      // Все теги могли снять: тогда поле уходит из записи, а не остаётся пустым списком.
+      if (!next.tags) delete existing.tags
     } else {
-      this.data.clients.push(this.cloneClient({ ...client, createdAt: client.createdAt || new Date().toISOString() }))
+      this.data.clients.push(next)
     }
     this.persist()
     return client

@@ -5,6 +5,7 @@ import {
   CLIENTS_ARCHIVE_LINK,
   clientCardBackFromQuery,
   clientLink,
+  clientTagFromQuery,
   clientsArchiveFromQuery,
   clientsLink,
   feedbackLink,
@@ -117,6 +118,34 @@ describe('ссылки архива клиентов', () => {
     expect(clientLink('c1')).toBe('/clients/c1')
     expect(clientCardBackFromQuery('archive')).toBe('/clients?archive=1')
     expect(clientCardBackFromQuery(null)).toBe('/clients')
+  })
+})
+
+describe('фильтр клиентов по тегу', () => {
+  it('тег попадает в адрес списка и карточки', () => {
+    expect(clientsLink(false, 'Оптовик')).toBe(`/clients?tag=${encodeURIComponent('Оптовик')}`)
+    expect(clientsLink(true, 'Оптовик')).toBe(
+      `/clients?archive=1&tag=${encodeURIComponent('Оптовик')}`,
+    )
+    expect(clientLink('c1', false, 'Должник')).toBe(`/clients/c1?tag=${encodeURIComponent('Должник')}`)
+    expect(clientLink('c1', true, 'Должник')).toBe(
+      `/clients/c1?from=archive&tag=${encodeURIComponent('Должник')}`,
+    )
+  })
+
+  it('читает тег из адреса и терпит пустое значение', () => {
+    expect(clientTagFromQuery(' Оптовик ')).toBe('Оптовик')
+    expect(clientTagFromQuery('')).toBeNull()
+    expect(clientTagFromQuery(null)).toBeNull()
+  })
+
+  it('возврат из карточки ведёт к списку с тем же фильтром', () => {
+    expect(clientCardBackFromQuery(null, 'Оптовик')).toBe(
+      `/clients?tag=${encodeURIComponent('Оптовик')}`,
+    )
+    expect(clientCardBackFromQuery('archive', 'Оптовик')).toBe(
+      `/clients?archive=1&tag=${encodeURIComponent('Оптовик')}`,
+    )
   })
 })
 

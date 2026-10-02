@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { AddressField } from '../components/AddressField'
 import { Icon } from '../components/Icons'
+import { TagField } from '../components/TagField'
 import { Badge, Button, Card, EmptyState, Field, Input, PhoneInput, Textarea } from '../components/ui'
 import type { AddressEntry } from '../db/addresses'
 import { useRoute } from '../router'
@@ -64,6 +65,15 @@ export function ClientDetail({ id }: { id: string }) {
         {client.archived && (
           <div className="field-hint" style={{ marginTop: 6 }}>
             Заказы и история сохранены. Восстановите клиента, чтобы снова оформлять заказы.
+          </div>
+        )}
+        {client.tags && client.tags.length > 0 && (
+          <div className="tag-row" style={{ marginTop: 8 }}>
+            {client.tags.map((tag) => (
+              <span className="tag-pill" key={tag}>
+                {tag}
+              </span>
+            ))}
           </div>
         )}
         <div style={{ marginTop: 8 }}>
@@ -270,6 +280,7 @@ function ClientForm({
   const [name, setName] = useState(initial?.name ?? '')
   const [phone, setPhone] = useState(initial?.phone ?? '')
   const [email, setEmail] = useState(initial?.email ?? '')
+  const [tags, setTags] = useState<string[]>(initial?.tags ?? [])
   const [comment, setComment] = useState(initial?.comment ?? '')
   const [addressText, setAddressText] = useState(initial?.address ?? '')
   const [addressEntry, setAddressEntry] = useState<AddressEntry | null>(
@@ -304,6 +315,8 @@ function ClientForm({
       name: name.trim(),
       phone: phone.trim(),
       email: email.trim(),
+      // Пустой список тегов не сохраняется: база (Database.cloneClient) убирает поле.
+      tags: tags.length ? tags : undefined,
       comment: comment.trim(),
       address: addressText.trim() || undefined,
       cadastralNumber: addressEntry?.cadastralNumber || undefined,
@@ -343,6 +356,12 @@ function ClientForm({
           onChange={(e) => setEmail(e.target.value)}
           placeholder="mail@example.com"
         />
+      </Field>
+      <Field
+        label="Теги"
+        hint="По тегам клиента можно отфильтровать список: «Оптовик», «Должник», «Новый»…"
+      >
+        <TagField value={tags} onChange={setTags} />
       </Field>
       <Field label="Адрес">
         <AddressField

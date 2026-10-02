@@ -39,6 +39,26 @@ describe('Database: клиенты и товары', () => {
     expect(db.getClient('c1')?.name).toBe('Иван Петров')
   })
 
+  it('хранит теги клиента без пустых значений и повторов', () => {
+    const { db } = setup()
+    db.saveClient({
+      id: 'c1',
+      name: 'Иван',
+      phone: '',
+      email: '',
+      comment: '',
+      createdAt: '',
+      tags: ['Оптовик', ' оптовик ', '', 'Должник'],
+    })
+
+    expect(db.getClient('c1')?.tags).toEqual(['Оптовик', 'Должник'])
+
+    // Снятые теги не остаются пустым списком: поля в записи просто нет.
+    const client = db.getClient('c1') as Client
+    db.saveClient({ ...client, tags: [] })
+    expect(db.getClient('c1')?.tags).toBeUndefined()
+  })
+
   it('каскадно удаляет клиента вместе с его заказами и возвращает остатки', () => {
     const { db } = setup()
     db.saveClient({ id: 'c1', name: 'Иван', phone: '', email: '', comment: '', createdAt: '' })

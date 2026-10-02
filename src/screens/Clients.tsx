@@ -1,22 +1,31 @@
 import { useState } from 'react'
-import { Badge, Button, EmptyState, Fab } from '../components/ui'
+import { Badge, Button, EmptyState, Fab, cx } from '../components/ui'
 import { Icon } from '../components/Icons'
 import { useRoute } from '../router'
 import { useData } from '../state/DataContext'
+import { collectClientTags, filterClientsByTag, sameClientTag } from '../utils/clients'
 import { plural } from '../utils/format'
-import { clientLink, clientsArchiveFromQuery } from '../utils/links'
+import { clientLink, clientTagFromQuery, clientsArchiveFromQuery, clientsLink } from '../utils/links'
 
-// Вид списка (активные или архив) хранится в адресе: `?archive=1` включает архив,
-// а переключает его значок в шапке (components/Layout.tsx), а не чипы на экране.
+// Вид списка (активные или архив) и фильтр по тегу живут в адресе: `?archive=1` включает
+// архив, `?tag=Оптовик` — фильтр. Переключатель архива — значок в шапке
+// (components/Layout.tsx), чипы тегов — на самом экране.
 export function Clients() {
   const { db } = useData()
   const { route, navigate } = useRoute()
   const [query, setQuery] = useState('')
   const archived = clientsArchiveFromQuery(route.query.get('archive'))
+  const tag = clientTagFromQuery(route.query.get('tag'))
 
   const clients = archived ? db.getArchivedClients() : db.getClients()
+  // Чипы собираются из того же списка, что виден на экране: в архиве предлагаются только
+  // теги архивных клиентов. Тег из адреса, которого в базе уже нет (последний клиент
+  // потерял тег), фильтром не считается — иначе список был бы пустым без объяснения.
+  const tags = collectClientTags(clients)
+  const activeTag = tag && tags.some((item) => sameClientTag(item, tag)) ? tag : null
+  const chips = tags.map((item) => ({ tag: item, active: tag !== null && sameClientTag(item, tag) }))
 
-  const filtered = clients.filter((c) => {
+  const filtered = filterClientsByTag(clients, activeTag).filter((c) => {
     const q = query.trim().toLowerCase()
     if (!q) return true
     return (
@@ -25,6 +34,21 @@ export function Clients() {
       c.email.toLowerCase().includes(q)
     )
   })
+
+  const emptyTitle = query
+    ? 'Ничего не найдено'
+    : activeTag
+      ? 'Нет клиентов с этим тегом'
+      : archived
+        ? 'Архив пуст'
+        : 'Пока нет клиентов'
+  const emptyDescription = query
+    ? 'Попробуйте изменить запрос'
+    : activeTag
+      ? 'Снимите фильтр или проставьте тег в карточке клиента'
+      : archived
+        ? 'Клиенты, отправленные в архив, появятся здесь: заказы и история сохраняются'
+        : 'Добавьте первого клиента — его заказы и история будут собираться автоматически'
 
   return (
     <div>
@@ -39,19 +63,33 @@ export function Clients() {
         </div>
       </div>
 
+      {chips.length > 0 && (
+        <div className="chips">
+          <button
+            className={cx('chip', !activeTag && 'chip-active')}
+            onClick={() => navigate(clientsLink(archived, null))}
+          >
+            Все
+          </button>
+          {chips.map((chip) => (
+            <button
+              key={chip.tag}
+              className={cx('chip', chip.active && 'chip-active')}
+              onClick={() => navigate(clientsLink(archived, chip.tag))}
+            >
+              {chip.tag}
+            </button>
+          ))}
+        </div>
+      )}
+
       {filtered.length === 0 ? (
         <EmptyState
           icon={archived ? 'archive' : 'users'}
-          title={query ? 'Ничего не найдено' : archived ? 'Архив пуст' : 'Пока нет клиентов'}
-          description={
-            query
-              ? 'Попробуйте изменить запрос'
-              : archived
-                ? 'Клиенты, отправленные в архив, появятся здесь: заказы и история сохраняются'
-                : 'Добавьте первого клиента — его заказы и история будут собираться автоматически'
-          }
+          title={emptyTitle}
+          description={emptyDescription}
           action={
-            !query && !archived ? (
+            !query && !activeTag && !archived ? (
               <Button icon="plus" onClick={() => navigate('/clients/new')}>
                 Добавить клиента
               </Button>
@@ -62,16 +100,26 @@ export function Clients() {
         <div className="list">
           {filtered.map((c) => {
             const count = db.getOrdersByClient(c.id).length
+            const clientTags = c.tags ?? []
             return (
               <button
                 key={c.id}
                 className="list-item"
-                onClick={() => navigate(clientLink(c.id, archived))}
+                onClick={() => navigate(clientLink(c.id, archived, activeTag))}
               >
                 <span className="avatar">{initials(c.name)}</span>
                 <span className="list-item-main">
                   <span className="list-item-title">{c.name}</span>
                   <span className="list-item-sub">{c.phone || '—'}</span>
+                  {clientTags.length > 0 && (
+                    <span className="tag-row">
+                      {clientTags.map((item) => (
+                        <span className="tag-pill" key={item}>
+                          {item}
+                        </span>
+                      ))}
+                    </span>
+                  )}
                 </span>
                 <Badge tone="neutral">
                   {count} {plural(count, 'заказ', 'заказа', 'заказов')}

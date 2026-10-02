@@ -1,6 +1,14 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Button, Card, Field, Input, IntegerInput, PhoneInput, cx } from '../components/ui'
 import { Icon } from '../components/Icons'
+import {
+  openReminderExactAlarmSettings,
+  reminderExactAlarmPermission,
+  reminderNotificationPermission,
+  reminderNotificationsSupported,
+  requestReminderNotifications,
+  type ReminderPermission,
+} from '../notifications/reminders'
 import { downloadBackup, downloadJson, readBackupFile } from '../db/backup'
 import { parseAddresses, saveAddresses } from '../db/addresses'
 import { seedDemo } from '../db/seed'
@@ -36,6 +44,29 @@ type UpdateState =
       error?: string
     }
 
+// Подписи состояния разрешений: пользователь должен понимать, придут уведомления или нет.
+function notificationPermissionText(state: ReminderPermission | null): string {
+  switch (state) {
+    case 'granted':
+      return 'Разрешены — напоминания приходят уведомлениями даже при закрытом приложении'
+    case 'denied':
+      return 'Запрещены — включите уведомления в системных настройках приложения SelfCRM'
+    default:
+      return 'Система спросит разрешение при первом напоминании'
+  }
+}
+
+function exactAlarmPermissionText(state: ReminderPermission | null): string {
+  switch (state) {
+    case 'granted':
+      return 'Разрешены — напоминание приходит в назначенную минуту'
+    case 'denied':
+      return 'Ограничены системой — напоминание может прийти с задержкой'
+    default:
+      return 'Система спросит разрешение, когда оно понадобится'
+  }
+}
+
 export function Settings() {
   const { db, refresh } = useData()
   const { theme, toggleTheme } = useTheme()
@@ -45,6 +76,51 @@ export function Settings() {
   const updatesRef = useRef<HTMLDivElement>(null)
   const autoCheckedRef = useRef(false)
   const [update, setUpdate] = useState<UpdateState>({ status: 'idle' })
+  // Разрешения на напоминания в системе (только Android): состояние видно в настройках,
+  // иначе непонятно, почему напоминания не приходят. В браузере и в Telegram раздела нет.
+  const notificationsSupported = reminderNotificationsSupported()
+  const [notificationPermission, setNotificationPermission] = useState<ReminderPermission | null>(null)
+  const [exactAlarmPermission, setExactAlarmPermission] = useState<ReminderPermission | null>(null)
+  const [notificationsBusy, setNotificationsBusy] = useState(false)
+
+  const reloadNotificationPermissions = useCallback(async () => {
+    const [display, exact] = await Promise.all([
+      reminderNotificationPermission(),
+      reminderExactAlarmPermission(),
+    ])
+    setNotificationPermission(display)
+    setExactAlarmPermission(exact)
+  }, [])
+
+  useEffect(() => {
+    if (!notificationsSupported) return
+    void reloadNotificationPermissions()
+  }, [notificationsSupported, reloadNotificationPermissions])
+
+  // «Разрешить» показывает системный запрос; после ответа состояние перечитывается,
+  // чтобы подпись соответствовала реальности.
+  const askNotifications = async () => {
+    setNotificationsBusy(true)
+    try {
+      await requestReminderNotifications()
+      await reloadNotificationPermissions()
+    } finally {
+      setNotificationsBusy(false)
+    }
+  }
+
+  // Точные напоминания (Android 12+) — отдельное разрешение системы: без него
+  // уведомление может опоздать, поэтому его тоже можно выдать из настроек.
+  const openAlarmSettings = async () => {
+    setNotificationsBusy(true)
+    try {
+      await openReminderExactAlarmSettings()
+      await reloadNotificationPermissions()
+    } finally {
+      setNotificationsBusy(false)
+    }
+  }
+
   // Переход из уведомления о новой версии: «/settings?section=updates».
   const highlightUpdates = route.query.get('section') === 'updates'
 
@@ -236,12 +312,58 @@ export function Settings() {
         </div>
       </Card>
 
+      {notificationsSupported && (
+        <Card className="settings-group">
+          <div className="section-title" style={{ marginBottom: 6 }}>
+            Напоминания
+          </div>
+          <div className="settings-row-desc" style={{ marginBottom: 12 }}>
+            Напоминания по заказам приходят уведомлениями Android: приложение можно закрыть —
+            система покажет напоминание в срок. Просроченные напоминания в уведомления не
+            попадают, о них напоминает главный экран.
+          </div>
+          <div className="settings-row">
+            <div>
+              <div className="settings-row-title">Уведомления</div>
+              <div className="settings-row-desc">{notificationPermissionText(notificationPermission)}</div>
+            </div>
+            {notificationPermission !== 'granted' && (
+              <Button
+                size="sm"
+                variant="secondary"
+                icon="bell"
+                disabled={notificationsBusy}
+                onClick={() => void askNotifications()}
+              >
+                Разрешить
+              </Button>
+            )}
+          </div>
+          <div className="settings-row">
+            <div>
+              <div className="settings-row-title">Точное время</div>
+              <div className="settings-row-desc">{exactAlarmPermissionText(exactAlarmPermission)}</div>
+            </div>
+            {exactAlarmPermission !== 'granted' && (
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={notificationsBusy}
+                onClick={() => void openAlarmSettings()}
+              >
+                Разрешить
+              </Button>
+            )}
+          </div>
+        </Card>
+      )}
+
       <Card className="settings-group">
         <div className="section-title" style={{ marginBottom: 6 }}>
           Исполнитель
         </div>
         <div className="settings-row-desc" style={{ marginBottom: 12 }}>
-          Реквизиты, которые попадают в чек (PDF): название, ИНН, ОГРН и контакты.
+          Реквизиты, которые попадают в чек и прайс-лист (PDF): название, ИНН, ОГРН и контакты.
         </div>
         <ContractorForm />
       </Card>

@@ -43,4 +43,12 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
+    <!-- Напоминания в системе (@capacitor/local-notifications). Те же разрешения
+         объявлены и плагином, но здесь они видны сразу: без POST_NOTIFICATIONS
+         (Android 13+) уведомления не показываются, а без SCHEDULE_EXACT_ALARM
+         (Android 12+) напоминание приходит с задержкой. Пользователь может
+         отозвать оба разрешения — состояние показано в «Настройки → Напоминания». -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 </manifest>

@@ -1,4 +1,5 @@
 import { Layout } from './components/Layout'
+import { ReminderNotifications } from './components/ReminderNotifications'
 import { SystemBack } from './components/SystemBack'
 import { UpdateToast } from './components/UpdateToast'
 import { useRoute } from './router'
@@ -21,6 +22,9 @@ export function App() {
     <>
       {renderScreen()}
       <SystemBack />
+      {/* Напоминания в системе: разметки не добавляет — следит за базой и обновляет
+          расписание уведомлений Android (в браузере и Telegram ничего не делает). */}
+      <ReminderNotifications />
       <UpdateToast />
     </>
   )

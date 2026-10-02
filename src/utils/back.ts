@@ -2,7 +2,12 @@
 // должны вести в одно и то же место, поэтому правила живут здесь, а не в разметке
 // экранов: шапка берёт стрелку из headerBackTarget, а кнопка — из backTarget.
 import type { Route } from '../router'
-import { clientCardBackFromQuery, clientsArchiveFromQuery } from './links'
+import {
+  clientCardBackFromQuery,
+  clientTagFromQuery,
+  clientsArchiveFromQuery,
+  clientsLink,
+} from './links'
 
 // Событие «логического назад» на document. Обработчики, которым нажатие адресовано
 // (открытое модальное окно, меню сортировки), вызывают preventDefault — тогда
@@ -21,8 +26,10 @@ export function headerBackTarget(route: Route): string | null {
   const seg = route.segments
   switch (seg[0] ?? '') {
     case 'clients':
-      // Карточка клиента помнит, что возврат должен вести в архив (?from=archive).
-      return seg[1] ? clientCardBackFromQuery(route.query.get('from')) : null
+      // Карточка клиента помнит, из какого списка её открыли: архив и фильтр по тегу.
+      return seg[1]
+        ? clientCardBackFromQuery(route.query.get('from'), route.query.get('tag'))
+        : null
     case 'orders':
       return seg[1] ? ORDERS_PATH : null
     case 'stock':
@@ -48,10 +55,10 @@ export function backTarget(route: Route): string | null {
 
   const root = route.segments[0] ?? ''
   if (root === '') return null
-  // Архив — это режим списка клиентов, а не отдельный раздел: возвращаемся
-  // к активным клиентам, а не на главную.
+  // Архив — это режим списка клиентов, а не отдельный раздел: возвращаемся к активным
+  // клиентам, сохраняя фильтр по тегу, а не на главную.
   if (root === 'clients' && clientsArchiveFromQuery(route.query.get('archive'))) {
-    return CLIENTS_PATH
+    return clientsLink(false, clientTagFromQuery(route.query.get('tag')))
   }
   return HOME_PATH
 }

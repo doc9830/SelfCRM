@@ -9,6 +9,7 @@ import { Directory, Filesystem } from '@capacitor/filesystem'
 import { Share } from '@capacitor/share'
 import { orderHeading } from '../utils/orders'
 import { orderPaymentState } from '../utils/payments'
+import { contractorHeader, pdfMoney } from './common'
 
 // В pdfmake 0.3.x шрифт Roboto (с кириллицей) подключается через виртуальную ФС.
 pdfMake.addVirtualFileSystem(vfs)
@@ -16,16 +17,6 @@ pdfMake.addVirtualFileSystem(vfs)
 // Возвращает готовый data-URL документа (нужно, чтобы записать файл на устройство).
 async function getPdfDataUrl(docDefinition: unknown): Promise<string> {
   return pdfMake.createPdf(docDefinition).getDataUrl()
-}
-
-// Сумма без знака валюты (символ «₽» может отсутствовать во встроенном шрифте),
-// используем «руб.».
-function pdfMoney(value: number): string {
-  const formatted = new Intl.NumberFormat('ru-RU', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(Number.isFinite(value) ? value : 0)
-  return `${formatted} руб.`
 }
 
 export interface ReceiptInput {
@@ -41,20 +32,8 @@ export async function generateReceiptPdf(input: ReceiptInput): Promise<void> {
   const number = order.number ? String(order.number) : order.id.slice(0, 8).toUpperCase()
   const payment = orderPaymentState(order)
 
-  const header: Array<Record<string, unknown>> = []
-  if (contractor.name.trim()) {
-    header.push({ text: contractor.name.trim(), style: 'company' })
-  }
-  const props: string[] = []
-  if (contractor.inn.trim()) props.push(`ИНН ${contractor.inn.trim()}`)
-  if (contractor.ogrn.trim()) props.push(`ОГРН ${contractor.ogrn.trim()}`)
-  if (contractor.kpp.trim()) props.push(`КПП ${contractor.kpp.trim()}`)
-  if (contractor.address.trim()) props.push(contractor.address.trim())
-  if (contractor.phone.trim()) props.push(`Тел. ${contractor.phone.trim()}`)
-  if (contractor.email.trim()) props.push(contractor.email.trim())
-  if (props.length) {
-    header.push({ text: props.join(' · '), style: 'companyProps' })
-  }
+  // Шапка с реквизитами — общая с прайс-листом (pdf/common.ts).
+  const header = contractorHeader(contractor)
 
   const clientLines: Array<Record<string, unknown>> = [
     { text: `Заказчик: ${client?.name?.trim() || '—'}` },

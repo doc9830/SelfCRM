@@ -17,6 +17,10 @@ export interface Client {
   archived?: boolean
   // Дата отправки в архив — показывается в карточке архивного клиента.
   archivedAt?: string
+  // Теги клиента («Оптовик», «Должник», «Новый»…): по ним карточка находится фильтром
+  // в списке (utils/clients.ts). Поле опционально для совместимости с данными,
+  // созданными до его появления.
+  tags?: string[]
 }
 
 export type ProductKind = 'product' | 'service'

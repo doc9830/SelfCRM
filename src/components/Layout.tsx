@@ -5,7 +5,7 @@ import { useRoute } from '../router'
 import { headerBackTarget } from '../utils/back'
 import { useTheme } from '../state/ThemeContext'
 import { sortScopeForRoute } from '../state/SortContext'
-import { clientsArchiveFromQuery, clientsLink } from '../utils/links'
+import { clientsArchiveFromQuery, clientTagFromQuery, clientsLink } from '../utils/links'
 import { cx } from './ui'
 
 const NAV_ITEMS: Array<{ path: string; label: string; icon: IconName }> = [
@@ -28,6 +28,8 @@ export function Layout({ title, children }: { title: string; children: ReactNode
   // и остаётся подсвеченным, пока открыт архив. Второе нажатие снимает выделение.
   const clientsList = route.segments.length === 1 && root === 'clients'
   const clientsArchived = clientsList && clientsArchiveFromQuery(route.query.get('archive'))
+  // Фильтр по тегу — часть адреса списка: переключатель архива его не сбрасывает.
+  const clientsTag = clientsList ? clientTagFromQuery(route.query.get('tag')) : null
 
   const isActive = (path: string) =>
     path === '/' ? root === '' : root === path.slice(1)
@@ -50,7 +52,7 @@ export function Layout({ title, children }: { title: string; children: ReactNode
           {clientsList && (
             <button
               className={cx('icon-btn', clientsArchived && 'icon-btn-active')}
-              onClick={() => navigate(clientsLink(!clientsArchived))}
+              onClick={() => navigate(clientsLink(!clientsArchived, clientsTag))}
               aria-pressed={clientsArchived}
               aria-label={clientsArchived ? 'Активные клиенты' : 'Архив клиентов'}
               title={clientsArchived ? 'Активные клиенты' : 'Архив клиентов'}

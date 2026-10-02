@@ -6,7 +6,9 @@ import { ORDER_STATUSES, ORDER_STATUS_LABEL } from '../types'
 import { money, plural } from '../utils/format'
 import { statisticsPeriodFromQuery } from '../utils/links'
 import { clientLabel, NO_CLIENT_ID } from '../utils/orders'
+import { describeDelivery } from '../reports/deliveryResult'
 import { rangeLabel } from '../reports/report'
+import { humanErrorMessage } from '../utils/errors'
 import { statusTone } from '../utils/status'
 import {
   filterOrdersByRange,
@@ -85,33 +87,15 @@ export function Statistics() {
         }),
       )
       .then(({ fileName, delivery }) => {
-        if (delivery.kind === 'native' || delivery.kind === 'shared') {
-          setExportNote('Файл готов — выберите, куда его сохранить или отправить.')
-          return
-        }
-        if (delivery.kind === 'downloaded') {
-          setExportNote(`${fileName} скачан в «Загрузки».`)
-          return
-        }
-        if (delivery.kind === 'cancelled') {
-          setExportNote('Отправка отменена — можно попробовать ещё раз.')
-          return
-        }
-        if (delivery.kind === 'unsupported') {
-          setExportError('В этой версии Telegram файл отдать нечем — откройте приложение в браузере.')
-          return
-        }
-        if (delivery.result.kind === 'opened') {
-          setExportNote('Отчёт уходит в «Загрузки» — файл откроется в Excel или таблицах.')
-          return
-        }
-        if (delivery.result.kind === 'copied') {
-          setExportNote('Ссылка на файл скопирована — откройте её в браузере, чтобы скачать отчёт.')
-          return
-        }
-        setExportError('Не удалось передать файл — попробуйте ещё раз.')
+        // Что сказать пользователю, решает общий модуль: тот же исход выгрузки
+        // объясняется одинаково и здесь, и на экране товаров (прайс-лист).
+        const text = describeDelivery(delivery, fileName)
+        setExportNote(text.note)
+        setExportError(text.error)
       })
-      .catch((error) => setExportError(exportErrorMessage(error)))
+      .catch((error) =>
+        setExportError(humanErrorMessage(error, 'Не удалось собрать отчёт — попробуйте ещё раз.')),
+      )
       .finally(() => setExportBusy(false))
   }
 
@@ -264,14 +248,6 @@ export function Statistics() {
       )}
     </div>
   )
-}
-
-// Сообщение об ошибке выгрузки. Свои сообщения (мост, доставка) написаны
-// по-русски и объясняют причину; всё остальное — технический текст библиотек и сети,
-// который пользователю ничего не говорит, поэтому заменяется понятной фразой.
-function exportErrorMessage(error: unknown): string {
-  const text = error instanceof Error ? error.message : ''
-  return /[А-Яа-я]/.test(text) ? text : 'Не удалось собрать отчёт — попробуйте ещё раз.'
 }
 
 function Stat({

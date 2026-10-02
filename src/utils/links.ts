@@ -2,6 +2,7 @@
 // конкретный список заказов и на раздел статистики, поэтому параметры адреса —
 // часть контракта экранов, а не разовая договорённость.
 import { ORDER_STATUSES, isActiveStatus, type Order, type OrderStatus } from '../types'
+import { normalizeClientTag } from './clients'
 import { FEEDBACK_TOPICS, type FeedbackTopic } from './feedback'
 import { PERIOD_KEYS, type PeriodKey } from './stats'
 
@@ -50,8 +51,9 @@ export function statisticsPeriodFromQuery(value: string | null): PeriodKey | nul
   return (PERIOD_KEYS as string[]).includes(normalized) ? (normalized as PeriodKey) : null
 }
 
-// Вид списка клиентов. Архив — это тот же `/clients` с параметром archive, поэтому
-// состояние переключателя живёт в адресе, а не в памяти экрана.
+// Вид списка клиентов. Архив — это тот же `/clients` с параметром archive, а тег — фильтр
+// `?tag=Оптовик`. Состояние переключателей живёт в адресе, а не в памяти экрана: ссылку
+// можно открыть заново, а возврат из карточки ведёт к тому же виду списка.
 export const CLIENTS_ARCHIVE_LINK = '/clients?archive=1'
 
 // Значение параметра archive из адреса: «1»/«true» — архив, всё остальное — активные.
@@ -60,23 +62,43 @@ export function clientsArchiveFromQuery(value: string | null): boolean {
   return normalized === '1' || normalized === 'true'
 }
 
-// Ссылка переключателя в шапке: включённый архив открывает архив, выключенный — активных.
-export function clientsLink(archived: boolean): string {
-  return archived ? CLIENTS_ARCHIVE_LINK : '/clients'
+// Параметр фильтра по тегу и его значение из адреса. Пустое значение тега не отличается
+// от отсутствующего: фильтровать не по чему — показываются все клиенты.
+export const CLIENTS_TAG_PARAM = 'tag'
+
+export function clientTagFromQuery(value: string | null): string | null {
+  return normalizeClientTag(value ?? '')
+}
+
+// Ссылка списка: архив и тег независимы, поэтому собираются вместе — переключатель архива
+// не теряет выбранный тег, а чип тега не сбрасывает архив.
+export function clientsLink(archived: boolean, tag: string | null = null): string {
+  const params = new URLSearchParams()
+  if (archived) params.set('archive', '1')
+  const normalized = clientTagFromQuery(tag)
+  if (normalized) params.set(CLIENTS_TAG_PARAM, normalized)
+  const query = params.toString()
+  return query ? `/clients?${query}` : '/clients'
 }
 
 // Метка «пришли из архива» в адресе карточки клиента.
 export const CLIENTS_FROM_ARCHIVE = 'archive'
 
-// Ссылка на карточку: архивный клиент помнит, что возврат должен вести в архив.
-export function clientLink(id: string, archived = false): string {
-  return archived ? `/clients/${id}?from=${CLIENTS_FROM_ARCHIVE}` : `/clients/${id}`
+// Ссылка на карточку: она помнит список, из которого её открыли, — архив и фильтр по тегу,
+// поэтому «Назад» возвращает к тому же виду списка, а не к полному списку клиентов.
+export function clientLink(id: string, archived = false, tag: string | null = null): string {
+  const params = new URLSearchParams()
+  if (archived) params.set('from', CLIENTS_FROM_ARCHIVE)
+  const normalized = clientTagFromQuery(tag)
+  if (normalized) params.set(CLIENTS_TAG_PARAM, normalized)
+  const query = params.toString()
+  return query ? `/clients/${id}?${query}` : `/clients/${id}`
 }
 
 // Куда ведёт кнопка «Назад» из карточки клиента.
-export function clientCardBackFromQuery(value: string | null): string {
+export function clientCardBackFromQuery(value: string | null, tag: string | null = null): string {
   const normalized = (value ?? '').trim().toLowerCase()
-  return normalized === CLIENTS_FROM_ARCHIVE ? CLIENTS_ARCHIVE_LINK : '/clients'
+  return clientsLink(normalized === CLIENTS_FROM_ARCHIVE, tag)
 }
 
 // «Повторить заказ»: форма нового заказа, заранее заполненная по образцу

@@ -3,9 +3,11 @@ import { Badge, Button, EmptyState, Fab, Field, Input, IntegerInput, Modal, Mone
 import { Icon } from '../components/Icons'
 import { useData } from '../state/DataContext'
 import { useSortValue } from '../state/SortContext'
-import { isService, type Product, type ProductKind } from '../types'
+import { isService, emptyContractor, type Product, type ProductKind } from '../types'
 import { marginHint, money, plural } from '../utils/format'
 import { uid } from '../utils/id'
+import { humanErrorMessage } from '../utils/errors'
+import { describeDelivery } from '../reports/deliveryResult'
 
 // Варианты сортировки заданы в state/SortContext.tsx — их показывает значок в шапке.
 type Sort = 'name' | 'stock-desc' | 'stock-asc' | 'price-desc' | 'price-asc'
@@ -15,6 +17,38 @@ export function Products() {
   const [query, setQuery] = useState('')
   const sort = useSortValue('products') as Sort
   const [editing, setEditing] = useState<Product | 'new' | null>(null)
+  // Состояние выгрузки прайс-листа: файл собирается асинхронно (это видно по кнопке),
+  // а результат объясняется текстом — «ничего не произошло» быть не должно.
+  const [exportBusy, setExportBusy] = useState(false)
+  const [exportNote, setExportNote] = useState('')
+  const [exportError, setExportError] = useState('')
+
+  // Модуль выгрузки подгружается по нажатию: в нём pdfmake со встроенным шрифтом,
+  // а каталог открывают и без выгрузки.
+  const runPriceListExport = () => {
+    if (exportBusy) return
+    setExportBusy(true)
+    setExportError('')
+    setExportNote('')
+    void import('../pdf/priceList')
+      .then(({ exportPriceList }) =>
+        exportPriceList({
+          products: db.getProducts(),
+          contractor: db.getSettings().contractor ?? emptyContractor(),
+        }),
+      )
+      .then(({ fileName, delivery }) => {
+        const text = describeDelivery(delivery, fileName)
+        setExportNote(text.note)
+        setExportError(text.error)
+      })
+      .catch((error) =>
+        setExportError(
+          humanErrorMessage(error, 'Не удалось собрать прайс-лист — попробуйте ещё раз.'),
+        ),
+      )
+      .finally(() => setExportBusy(false))
+  }
 
   const products = db.getProducts()
   const filtered = products.filter((p) => {
@@ -86,6 +120,35 @@ export function Products() {
               )}
             </button>
           ))}
+        </div>
+      )}
+
+      {products.length > 0 && (
+        <div className="section" style={{ marginTop: 16 }}>
+          {/* Прайс-лист — по всему каталогу, а не по строке поиска: это ответ на вопрос
+              «сколько стоит», его отправляют клиенту целиком. */}
+          <Button
+            variant="outline"
+            icon="download"
+            full
+            disabled={exportBusy}
+            onClick={runPriceListExport}
+          >
+            {exportBusy ? 'Готовим файл…' : 'Прайс-лист в PDF'}
+          </Button>
+          <div className="field-hint" style={{ marginTop: 6 }}>
+            Весь каталог одной страницей: товары, услуги и цены — можно отправить клиенту
+          </div>
+          {exportNote && (
+            <div className="field-hint" style={{ marginTop: 6 }}>
+              {exportNote}
+            </div>
+          )}
+          {exportError && (
+            <div className="field-error" style={{ marginTop: 6 }}>
+              {exportError}
+            </div>
+          )}
         </div>
       )}
 

@@ -12,7 +12,10 @@ Android, чтобы приложение и страница выглядели 
     mipmap-*/ic_launcher_foreground.png — передний план адаптивного значка (API 26+):
                                           буква без фона, фон задаётся цветом
                                           @color/ic_launcher_background = #2563EB;
-    drawable*/splash.png               — заставка при запуске: знак по центру.
+    drawable*/splash.png               — заставка при запуске: знак по центру;
+    drawable-*/ic_stat_selfcrm.png     — значок уведомлений о напоминаниях: белая буква
+                                          на прозрачном фоне (Android рисует такие значки
+                                          силуэтом и подкрашивает их сам).
 
 Размеры файлов не меняются: новые картинки рисуются в тех же размерах, что и прежние
 (для сплэша размер берётся у существующего файла).
@@ -51,6 +54,9 @@ LAUNCHER_SIZES = {'mdpi': 48, 'hdpi': 72, 'xhdpi': 96, 'xxhdpi': 144, 'xxxhdpi':
 # Передний план адаптивного значка: 108dp, безопасная зона — внутренние 72dp.
 FOREGROUND_SIZES = {'mdpi': 108, 'hdpi': 162, 'xhdpi': 216, 'xxhdpi': 324, 'xxxhdpi': 432}
 SAFE_ZONE = 72 / 108
+# Значок уведомлений (напоминания в системе): 24dp по плотностям — стандартный размер
+# значка в строке состояния Android.
+NOTIFICATION_SIZES = {'mdpi': 24, 'hdpi': 36, 'xhdpi': 48, 'xxhdpi': 72, 'xxxhdpi': 96}
 
 # Рисуем в четыре раза крупнее и уменьшаем: так края сглаживаются.
 SUPERSAMPLE = 4
@@ -132,6 +138,11 @@ def main() -> None:
 
     for density, size in FOREGROUND_SIZES.items():
         save(os.path.join(RES, f'mipmap-{density}', 'ic_launcher_foreground.png'), foreground(size))
+
+    # Значок уведомлений: тот же знак без подложки — в строке состояния Android он
+    # показывается силуэтом, поэтому фон должен быть прозрачным.
+    for density, size in NOTIFICATION_SIZES.items():
+        save(os.path.join(RES, f'drawable-{density}', 'ic_stat_selfcrm.png'), glyph(size))
 
     # Заставка: размеры прежних файлов сохраняем — их подбирал шаблон Capacitor
     # под разные экраны, и менять раскладку здесь незачем.

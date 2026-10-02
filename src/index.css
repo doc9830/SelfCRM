@@ -723,6 +723,74 @@ button {
   color: #fff;
 }
 
+/* ---- Теги клиентов ---- */
+
+/* Тег — подпись, а не кнопка: в списке и в карточке он показан плашкой, а убирается
+   только в поле редактирования (там рядом с подписью есть крестик). */
+.tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.tag-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--primary-soft);
+  color: var(--primary-strong);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.7;
+}
+
+.tag-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  opacity: 0.7;
+}
+
+.tag-remove:hover {
+  opacity: 1;
+}
+
+/* Поле тегов в карточке клиента: список выбранных, строка ввода и готовые подписи. */
+.tag-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tag-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tag-input .input {
+  flex: 1;
+  min-width: 0;
+}
+
+.tag-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tag-suggestions .chip {
+  padding: 5px 11px;
+  font-size: 12px;
+}
+
 /* ---- Обратная связь ---- */
 
 /* Адрес получателя письма: показывается крупно и с кнопкой «Копировать», потому что его
