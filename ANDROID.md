@@ -307,7 +307,16 @@ chmod 600 .env.local
 6. Обновите лендинг ([SelfCRMlanding](https://github.com/doc9830/SelfCRMlanding)): в
    `index.html` — номер версии и ссылку на APK (meta, JSON-LD, кнопка, шаг 01), описание новых
    возможностей и свежие скриншоты, затем `og-cover.png`. Порядок съёмки и сборки обложки
-   описан в README репозитория лендинга.
+   описан в README репозитория лендинга. Обложку собирайте генератором
+   (`python3 make-cover.py --version <версия> --shot "Screenshots v3/Главный экран (светлый).png"
+   --out og-cover.png`) и этот же файл кладите в `release-assets/<тег>/cover.png` — тогда страница,
+   релиз и пост в Telegram показывают одну картинку.
+7. Поднимите версию в Telegram-версии ([selfcrm-tg](https://github.com/doc9830/selfcrm-tg)):
+   `npm run bump -- <версия>` обновляет `package.json`, `src/version.ts` и
+   `android/app/build.gradle`. Версию видно в «Настройки» Mini App, и она попадает в тему письма
+   обратной связи (`SelfCRM <версия> — …`). Сам перенос изменений из этой сборки идёт отдельным
+   шагом — `node scripts/sync-from-selfcrm.mjs` (см. `docs/UPSTREAM_SYNC.md` там же) — и версии
+   не касается: номер ведут вместе с выпуском Android-сборки, даже если код Mini App отстаёт.
 
 > Переменные окружения для терминала: `ANDROID_HOME`/`ANDROID_SDK_ROOT` — путь к Android SDK,
 > `JAVA_HOME` — путь к JDK 21: release-APK собирается только на нём.
