@@ -9,12 +9,18 @@
 // есть изначально (`USE_EXACT_ALARM` в манифесте: система выдаёт его при установке), поэтому
 // напоминание приходит в назначенную минуту, а не «когда-нибудь»: неточный будильник система
 // сдвигает на неопределённый срок. Состояние разрешений, список запланированного и проверочное
-// уведомление показывает «Настройки → Напоминания» (`readReminderSystemReport`,
-// `sendTestReminderNotification`) — без них «напоминания не пришли» остаётся загадкой.
+// уведомление показывает служебная карточка «Напоминания» на экране настроек
+// (`readReminderSystemReport`, `sendTestReminderNotification`) — без них «напоминания не пришли»
+// остаётся загадкой. Обычному пользователю карточка не нужна, поэтому она скрыта и открывается
+// пятью нажатиями по строке версии (`notifications/diagnostics.ts`).
 //
-// Система может и промолчать: Capacitor ловит исключение из метода плагина, пишет его в лог и
-// оставляет вызов без ответа, поэтому обещание в JavaScript повисает. Из-за этого экран настроек
-// вечно показывал «Проверяем состояние…», а синхронизация не доходила до постановки расписания.
+// Молчание бывает по двум причинам, и обе — со стороны моста. Первая — сам плагин: это Proxy с
+// полем `then`, то есть «тогда-обещание»; возвращать его из `async`-функции нельзя
+// (`loadLocalNotifications` отдаёт обёртку `{ plugin }`), иначе `await` вызовет `then()` моста,
+// тот ответит «then() is not implemented on android», а обещание в JavaScript не завершится.
+// Из-за этого экран настроек вечно показывал «Проверяем состояние…», а синхронизация не доходила
+// до постановки расписания: напоминания молча не вставали. Вторая — система может не ответить:
+// Capacitor ловит исключение из метода плагина, пишет его в лог и оставляет вызов без ответа.
 // Поэтому каждый вызов системы ждём ограниченное время (`askSystem`), а причину сбоя показываем
 // словами: и в строках состояния, и подписью «Не удалось поставить расписание» в настройках
 // (`reminderNotificationProblem`).
@@ -173,9 +179,21 @@ export function reminderNotificationsSupported(): boolean {
 
 type LocalNotificationsPlugin = (typeof import('@capacitor/local-notifications'))['LocalNotifications']
 
-async function loadLocalNotifications(): Promise<LocalNotificationsPlugin> {
+/**
+ * Подгруженный плагин напоминаний. Плагин отдаётся полем обёртки, а не значением обещания:
+ * плагин Capacitor — это Proxy со свойством `then`, поэтому `async`-функция, возвращающая его
+ * напрямую, превращает плагин в «обещание». `await` тогда зовёт `LocalNotifications.then`,
+ * метода `then` у плагина нет, система отвечает ошибкой, а само обещание остаётся без ответа —
+ * навсегда. Именно из-за этого «Настройки → Напоминания» вечно показывали «Проверяем
+ * состояние…», а расписание не вставало: загрузчик плагина не завершался ни разу.
+ */
+interface LoadedNotifications {
+  plugin: LocalNotificationsPlugin
+}
+
+async function loadLocalNotifications(): Promise<LoadedNotifications> {
   const { LocalNotifications } = await import('@capacitor/local-notifications')
-  return LocalNotifications
+  return { plugin: LocalNotifications }
 }
 
 // Итог вызова системы: либо ответ, либо причина, по которой его нет (ошибка плагина или
@@ -465,9 +483,9 @@ async function pendingState(
  */
 export async function readReminderSystemReport(): Promise<ReminderSystemReport | null> {
   if (!reminderNotificationsSupported()) return null
-  let plugin: LocalNotificationsPlugin
+  let loaded: LoadedNotifications
   try {
-    plugin = await loadLocalNotifications()
+    loaded = await loadLocalNotifications()
   } catch (error) {
     // Плагин не загрузился — системных напоминаний нет вовсе. Это тоже состояние, о котором
     // нужно сказать словами: по вечному «Проверяем состояние…» понять что-либо нельзя.
@@ -484,6 +502,7 @@ export async function readReminderSystemReport(): Promise<ReminderSystemReport |
       ],
     }
   }
+  const { plugin } = loaded
   const problems: ReminderProblem[] = []
   // Читаем все три состояния сразу: они независимы, а при замолчавшей системе ожидание подряд
   // сложилось бы втрое — «Проверяем состояние…» висело бы пятнадцать секунд вместо пяти.
@@ -502,7 +521,7 @@ export async function readReminderSystemReport(): Promise<ReminderSystemReport |
 export async function allowReminderNotifications(): Promise<boolean> {
   if (!reminderNotificationsSupported()) return false
   try {
-    const plugin = await loadLocalNotifications()
+    const { plugin } = await loadLocalNotifications()
     return await askNotificationPermission(plugin, true)
   } catch (error) {
     console.warn('SelfCRM: не удалось запросить разрешение на уведомления', error)
@@ -519,7 +538,7 @@ export async function allowReminderNotifications(): Promise<boolean> {
 export async function allowExactReminderAlarms(): Promise<boolean> {
   if (!reminderNotificationsSupported()) return false
   try {
-    const plugin = await loadLocalNotifications()
+    const { plugin } = await loadLocalNotifications()
     const answer = await askSystem(
       () => plugin.changeExactNotificationSetting(),
       ACTION_TIMEOUT_MS,
@@ -543,7 +562,7 @@ export async function sendTestReminderNotification(
 ): Promise<ReminderTestStatus> {
   if (!reminderNotificationsSupported()) return 'unsupported'
   try {
-    const plugin = await loadLocalNotifications()
+    const { plugin } = await loadLocalNotifications()
     setProblem(null)
 
     // Прежняя проверка могла не сработать (уведомления не были разрешены): снимаем её,
@@ -653,7 +672,7 @@ export async function syncReminderNotifications(
 ): Promise<ReminderSyncStatus> {
   if (!reminderNotificationsSupported()) return setStatus('unsupported')
   try {
-    const plugin = await loadLocalNotifications()
+    const { plugin } = await loadLocalNotifications()
     const planned = planReminderNotifications(
       input.entries,
       input.now ?? new Date(),

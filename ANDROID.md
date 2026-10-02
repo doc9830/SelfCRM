@@ -227,7 +227,7 @@ chmod 600 .env.local
    `android/app/build.gradle`; `versionCode` увеличивается на 1):
 
    ```bash
-   npm run bump -- 1.8.3
+   npm run bump -- 1.8.4
    ```
 
 2. Проверьте и соберите веб-часть, затем синхронизируйте её с Android-проектом:

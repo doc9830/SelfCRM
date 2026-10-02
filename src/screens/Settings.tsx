@@ -11,6 +11,11 @@ import { INN_LENGTHS, KPP_LENGTHS, OGRN_LENGTHS, hasValidDigitLength, isPhoneVal
 import { Capacitor } from '@capacitor/core'
 import { downloadUpdate, fetchLatestRelease, installUpdate, isNewerVersion, openExternal, type ReleaseInfo } from '../updates'
 import {
+  countDiagnosticTap,
+  readDiagnosticsOpen,
+  writeDiagnosticsOpen,
+} from '../notifications/diagnostics'
+import {
   allowExactReminderAlarms,
   allowReminderNotifications,
   readReminderSystemReport,
@@ -65,14 +70,20 @@ export function Settings() {
   const fileRef = useRef<HTMLInputElement>(null)
   const addressFileRef = useRef<HTMLInputElement>(null)
   const updatesRef = useRef<HTMLDivElement>(null)
+  const remindersRef = useRef<HTMLDivElement>(null)
+  // Нажатия по строке версии подряд: пять из них открывают скрытую диагностику напоминаний.
+  const versionTapsRef = useRef(0)
   const autoCheckedRef = useRef(false)
   const [update, setUpdate] = useState<UpdateState>({ status: 'idle' })
 
   // Напоминания в системе: разрешения и список запланированного. Экран есть только в сборке
   // приложения — в браузере и Telegram системных уведомлений нет, поэтому и карточки нет.
+  // Обычному пользователю карточка не нужна и занимает на экране полстраницы, поэтому она скрыта:
+  // открывается пятью нажатиями по строке версии в «Обновлениях» (`notifications/diagnostics.ts`).
   const isNative = Capacitor.isNativePlatform()
   const [reminders, setReminders] = useState<ReminderSystemReport | null>(null)
   const [reminderTest, setReminderTest] = useState<'idle' | 'sending' | ReminderTestStatus>('idle')
+  const [showReminders, setShowReminders] = useState(() => readDiagnosticsOpen())
 
   // Причина последнего сбоя пересборки расписания: расписание пересобирает фоновая
   // синхронизация (components/ReminderNotifications.tsx), поэтому подписка, а не чтение
@@ -82,10 +93,11 @@ export function Settings() {
     reminderNotificationProblem,
   )
 
-  // Состояние напоминаний читается при открытии экрана: системные разрешения нельзя спросить
-  // синхронно, а показать их нужно сразу — иначе непонятно, дойдут ли напоминания.
+  // Состояние напоминаний читается при открытии скрытой карточки: системные разрешения нельзя
+  // спросить синхронно, а показать их нужно сразу — иначе непонятно, дойдут ли напоминания.
+  // Пока карточка скрыта, к системе не обращаемся вовсе.
   useEffect(() => {
-    if (!isNative) return
+    if (!isNative || !showReminders) return
     let alive = true
     void readReminderSystemReport().then((report) => {
       if (alive) setReminders(report)
@@ -93,7 +105,7 @@ export function Settings() {
     return () => {
       alive = false
     }
-  }, [isNative])
+  }, [isNative, showReminders])
 
   const refreshReminders = async () => {
     setReminders(await readReminderSystemReport())
@@ -123,6 +135,26 @@ export function Settings() {
     const result = await sendTestReminderNotification()
     setReminderTest(result)
     await refreshReminders()
+  }
+
+  // Пять нажатий по строке версии открывают скрытую диагностику напоминаний. До пятого нажатия
+  // экран ничем себя не выдаёт — так жест и остаётся секретным. Карточка стоит выше строки версии,
+  // поэтому после открытия прокручиваем к ней: иначе казалось бы, что ничего не произошло.
+  const tapVersion = () => {
+    const { taps, open } = countDiagnosticTap(versionTapsRef.current)
+    versionTapsRef.current = taps
+    if (!open) return
+    setShowReminders(true)
+    writeDiagnosticsOpen(true)
+    window.setTimeout(() => {
+      remindersRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 80)
+  }
+
+  // «Скрыть» в карточке: настройки возвращаются к обычному виду, выбор запоминается.
+  const hideReminders = () => {
+    setShowReminders(false)
+    writeDiagnosticsOpen(false)
   }
 
   // Переход из уведомления о новой версии: «/settings?section=updates».
@@ -361,97 +393,106 @@ export function Settings() {
         </div>
       </Card>
 
-      {isNative && (
-        <Card className="settings-group">
-          <div className="section-title" style={{ marginBottom: 6 }}>
-            Напоминания
-          </div>
-          <div className="settings-row-desc" style={{ marginBottom: 4 }}>
-            Напоминания по заказам приходят уведомлением Android, даже когда SelfCRM закрыта.
-            Здесь видно, всё ли для этого готово на телефоне.
-          </div>
-          <div className="settings-row">
-            <div>
-              <div className="settings-row-title">Уведомления системы</div>
-              <div className="settings-row-desc">{notificationsDesc}</div>
-            </div>
-            {reminders?.notifications === 'denied' && (
-              <Button size="sm" variant="secondary" icon="bell" onClick={() => void allowReminders()}>
-                Разрешить
+      {isNative && showReminders && (
+        <div ref={remindersRef}>
+          <Card className="settings-group">
+            <div
+              className="settings-row"
+              style={{ marginBottom: 6, paddingTop: 0, borderBottom: 'none' }}
+            >
+              <div className="section-title">Напоминания</div>
+              <Button size="sm" variant="secondary" onClick={hideReminders}>
+                Скрыть
               </Button>
-            )}
-          </div>
-          <div className="settings-row">
-            <div>
-              <div className="settings-row-title">Точные будильники</div>
-              <div className="settings-row-desc">{exactAlarmsDesc}</div>
             </div>
-            {reminders?.exact === 'denied' && (
+            <div className="settings-row-desc" style={{ marginBottom: 4 }}>
+              Напоминания по заказам приходят уведомлением Android, даже когда SelfCRM закрыта.
+              Здесь видно, всё ли для этого готово на телефоне. Окно служебное — обычному
+              пользователю оно не нужно и открывается пятью нажатиями по строке версии.
+            </div>
+            <div className="settings-row">
+              <div>
+                <div className="settings-row-title">Уведомления системы</div>
+                <div className="settings-row-desc">{notificationsDesc}</div>
+              </div>
+              {reminders?.notifications === 'denied' && (
+                <Button size="sm" variant="secondary" icon="bell" onClick={() => void allowReminders()}>
+                  Разрешить
+                </Button>
+              )}
+            </div>
+            <div className="settings-row">
+              <div>
+                <div className="settings-row-title">Точные будильники</div>
+                <div className="settings-row-desc">{exactAlarmsDesc}</div>
+              </div>
+              {reminders?.exact === 'denied' && (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  icon="alert"
+                  onClick={() => void allowExactAlarms()}
+                >
+                  Разрешить
+                </Button>
+              )}
+            </div>
+            <div className="settings-row">
+              <div>
+                <div className="settings-row-title">Запланировано в системе</div>
+                <div className="settings-row-desc">{pendingDesc}</div>
+              </div>
               <Button
                 size="sm"
                 variant="secondary"
-                icon="alert"
-                onClick={() => void allowExactAlarms()}
+                icon="refresh"
+                onClick={() => void refreshReminders()}
               >
-                Разрешить
+                Обновить
               </Button>
-            )}
-          </div>
-          <div className="settings-row">
-            <div>
-              <div className="settings-row-title">Запланировано в системе</div>
-              <div className="settings-row-desc">{pendingDesc}</div>
             </div>
-            <Button
-              size="sm"
-              variant="secondary"
-              icon="refresh"
-              onClick={() => void refreshReminders()}
-            >
-              Обновить
-            </Button>
-          </div>
-          <div className="settings-row">
-            <div>
-              <div className="settings-row-title">Проверить уведомление</div>
-              <div className="settings-row-desc">
-                Через 15 секунд придёт проверочное уведомление — сверните SelfCRM и подождите
+            <div className="settings-row">
+              <div>
+                <div className="settings-row-title">Проверить уведомление</div>
+                <div className="settings-row-desc">
+                  Через 15 секунд придёт проверочное уведомление — сверните SelfCRM и подождите
+                </div>
               </div>
+              <Button
+                size="sm"
+                variant="primary"
+                icon="bell"
+                disabled={reminderTest === 'sending'}
+                onClick={() => void checkReminderSystem()}
+              >
+                {reminderTest === 'sending' ? 'Отправка…' : 'Проверить'}
+              </Button>
             </div>
-            <Button
-              size="sm"
-              variant="primary"
-              icon="bell"
-              disabled={reminderTest === 'sending'}
-              onClick={() => void checkReminderSystem()}
-            >
-              {reminderTest === 'sending' ? 'Отправка…' : 'Проверить'}
-            </Button>
-          </div>
-          {reminderTest !== 'idle' && reminderTest !== 'sending' && (
+            {reminderTest !== 'idle' && reminderTest !== 'sending' && (
+              <div className="field-hint" style={{ marginTop: 8 }}>
+                {REMINDER_TEST_MESSAGE[reminderTest]}
+              </div>
+            )}
+            {reminders && reminders.problems.length > 0 && (
+              <div className="field-hint reminder-notice" style={{ marginTop: 8 }}>
+                Система напоминаний ответила не полностью — нажмите «Обновить» ниже, чтобы прочитать
+                состояние ещё раз. Это сбой системы телефона, а не данных: клиенты и заказы на месте.
+              </div>
+            )}
+            {syncProblem && (
+              <div className="field-hint reminder-notice" style={{ marginTop: 8 }}>
+                Расписание не удалось поставить — {syncProblem}. Пока причина не уйдёт, напоминания
+                видны только на экране приложения.
+              </div>
+            )}
             <div className="field-hint" style={{ marginTop: 8 }}>
-              {REMINDER_TEST_MESSAGE[reminderTest]}
+              Напоминания приходят, даже когда SelfCRM закрыта. Если смахнуть приложение из списка
+              недавних задач, Android снимает запланированные напоминания — откройте SelfCRM, и они
+              встанут снова. Энергосбережение телефона тоже может отложить уведомление: в
+              настройках батареи разрешите SelfCRM работу в фоне.
             </div>
-          )}
-          {reminders && reminders.problems.length > 0 && (
-            <div className="field-hint reminder-notice" style={{ marginTop: 8 }}>
-              Система напоминаний ответила не полностью — нажмите «Обновить» ниже, чтобы прочитать
-              состояние ещё раз. Это сбой системы телефона, а не данных: клиенты и заказы на месте.
-            </div>
-          )}
-          {syncProblem && (
-            <div className="field-hint reminder-notice" style={{ marginTop: 8 }}>
-              Расписание не удалось поставить — {syncProblem}. Пока причина не уйдёт, напоминания
-              видны только на экране приложения.
-            </div>
-          )}
-          <div className="field-hint" style={{ marginTop: 8 }}>
-            Напоминания приходят, даже когда SelfCRM закрыта. Если смахнуть приложение из списка
-            недавних задач, Android снимает запланированные напоминания — откройте SelfCRM, и они
-            встанут снова. Энергосбережение телефона тоже может отложить уведомление: в
-            настройках батареи разрешите SelfCRM работу в фоне.
-          </div>
-      </Card>
+          </Card>
+        </div>
       )}
 
       <Card className="settings-group">
@@ -607,7 +648,9 @@ export function Settings() {
             Обновления
           </div>
           <div className="settings-row">
-            <div>
+            {/* Пять нажатий по строке версии открывают скрытую диагностику напоминаний: обычному
+                пользователю она не нужна. Жест описан в notifications/diagnostics.ts. */}
+            <div onClick={tapVersion}>
               <div className="settings-row-title">Проверить обновления</div>
               <div className="settings-row-desc">Текущая версия {APP_VERSION}</div>
             </div>
