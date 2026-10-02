@@ -13,6 +13,20 @@ function iso(daysAgo, hour = 12, minute = 0) {
   return d.toISOString()
 }
 
+// Самое старое событие демо-базы — 30 дней назад (движения склада и заказы).
+const EVENT_SPAN_DAYS = 30
+
+// Демо-база должна попадать в текущий месяц: кадр «Статистика» открывается с периодом
+// «Месяц», а снимать скриншоты можно и 1-го числа. Поэтому смещения событий сжимаются так,
+// чтобы самое старое осталось в текущем месяце (на середине месяца масштаб равен 1).
+const EVENT_SCALE = Math.min(1, Math.max(new Date().getDate() - 1, 0) / EVENT_SPAN_DAYS)
+
+// Дата события (заказ, платёж, движение склада, создание напоминания). Гранулярность —
+// четверть дня: даты остаются разными, но не выходят за начало месяца.
+function isoEvent(daysAgo, hour = 12, minute = 0) {
+  return iso(Math.round(daysAgo * EVENT_SCALE * 4) / 4, hour, minute)
+}
+
 function isoInHours(hours) {
   const d = new Date()
   d.setHours(d.getHours() + hours, 0, 0, 0)
@@ -104,7 +118,7 @@ function buildStockMoves(products) {
       moves.push({
         id: `move-${product.id}-${index + 1}`,
         productId: product.id,
-        date: iso(daysAgo, 10 + index),
+        date: isoEvent(daysAgo, 10 + index),
         delta,
         kind,
         note,
@@ -116,6 +130,14 @@ function buildStockMoves(products) {
   return moves
 }
 
+// Теги демо-клиентов: в кадре списка видно и чипы фильтра, и подписи в строках.
+const CLIENT_TAGS = {
+  'ООО «Кухни Плюс»': ['Оптовик'],
+  'ООО «Ромашка»': ['Оптовик', 'Должник'],
+  'Иван Петров': ['Новый'],
+  'Мария Смирнова': ['Новый'],
+}
+
 export function demoSnapshot() {
   const clients = CLIENTS.map(([name, phone, email, address, comment, daysAgo], index) => ({
     id: `client-${index + 1}`,
@@ -125,6 +147,7 @@ export function demoSnapshot() {
     comment,
     address,
     createdAt: iso(daysAgo, 11),
+    ...(CLIENT_TAGS[name] ? { tags: CLIENT_TAGS[name] } : {}),
     ...(name === 'Елена Никитина' ? { archived: true, archivedAt: iso(30, 15) } : {}),
   }))
 
@@ -151,14 +174,14 @@ export function demoSnapshot() {
       ? [{
           id: `payment-${index + 1}`,
           amount: Math.round(total * paid),
-          date: iso(daysAgo, 14),
+          date: isoEvent(daysAgo, 14),
           comment: paid === 1 ? 'Оплата' : 'Предоплата',
         }]
       : []
     return {
       id: `order-${index + 1}`,
       clientId: clients[clientIndex].id,
-      date: iso(daysAgo, 13),
+      date: isoEvent(daysAgo, 13),
       status,
       items: positions,
       payments,
@@ -167,7 +190,7 @@ export function demoSnapshot() {
         kind,
         text,
         dueAt: when < 0 ? iso(1, 10) : when === 0 ? isoInHours(2) : isoInDays(when, 9),
-        createdAt: iso(Math.max(daysAgo, 1), 13),
+        createdAt: isoEvent(Math.max(daysAgo, 1), 13),
       })),
       comment,
     }

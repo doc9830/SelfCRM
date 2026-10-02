@@ -162,7 +162,7 @@ async function fillStockEdit() {
 const SCREENS = [
   { file: 'Главный экран', hash: '#/', must: ['Активные заказы', 'К оплате', 'Напоминания', 'СЕГОДНЯ'] },
   { file: 'К оплате', hash: '#/debt', must: ['Осталось получить', 'к оплате', 'Заказ №'] },
-  { file: 'Клиенты', hash: '#/clients', must: ['ООО «Кухни Плюс»', 'Мария Смирнова'] },
+  { file: 'Клиенты', hash: '#/clients', must: ['ООО «Кухни Плюс»', 'Мария Смирнова', 'Оптовик'] },
   { file: 'Карточка клиента', hash: `#/clients/${snapshot.clients[0].id}`,
     must: ['История заказов', 'Маршрут', 'Вызов'] },
   { file: 'Архив клиентов', hash: '#/clients?archive=1', must: ['Архив', 'Елена Никитина'] },
@@ -179,7 +179,8 @@ const SCREENS = [
     scrollTo: 'Повторить заказ', scrollBlock: 'end' },
   { file: 'Новый заказ', hash: '#/orders/new', setup: fillNewOrder, scrollBy: 0,
     must: ['Позиции', 'Добавить позицию', 'Итого'] },
-  { file: 'Товары', hash: '#/products', must: ['Смеситель для кухни', 'Услуга'] },
+  { file: 'Товары', hash: '#/products', must: ['Смеситель для кухни', 'Услуга', 'Прайс-лист в PDF'],
+    scrollBy: 1 },
   { file: 'Карточка товара', hash: '#/products', setup: openProductCard,
     must: ['Цена, ₽', 'Себестоимость, ₽', 'Прибыль с единицы'] },
   { file: 'Склад', hash: '#/stock', must: ['Приход', 'Списание', 'Смеситель для кухни'] },
