@@ -192,7 +192,7 @@ npm run dev        # запуск в браузере
 npm run build      # production-сборка в dist/
 npm test           # тесты
 npm run typecheck  # проверка типов
-npm run bump -- 1.3.1  # поднять версию сразу в package.json, src/version.ts и build.gradle
+npm run bump -- 1.8.1  # поднять версию сразу в package.json, src/version.ts и build.gradle
 ```
 
 Ключ подсказок адресов (Дадата) в исходниках не хранится: положите `VITE_DADATA_TOKEN=...`
