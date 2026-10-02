@@ -78,6 +78,25 @@ async function sync(entries: ReminderEntry[]) {
   return syncReminderNotifications({ entries, now: NOW })
 }
 
+/**
+ * Двигает время, пока обещание не выполнится: подгрузка плагина и каждое обращение к системе —
+ * это отдельные задачи, поэтому одного сдвига времени мало. Реальные секунды предела ожидания
+ * в тестах не выжидаем.
+ */
+async function waitForTimers<T>(work: Promise<T>): Promise<T> {
+  let settled = false
+  void work.then(
+    () => {
+      settled = true
+    },
+    () => {
+      settled = true
+    },
+  )
+  while (!settled) await vi.advanceTimersByTimeAsync(60_000)
+  return work
+}
+
 function scheduled(): ScheduledNotification[] {
   const calls = plugin.schedule.mock.calls
   return calls.length ? calls[calls.length - 1][0].notifications : []
@@ -182,6 +201,7 @@ describe('Напоминания в системе: разрешение на у
   })
 
   it('выключенные в системе уведомления — не сбой, а состояние: экран узнаёт о них', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     plugin.schedule.mockRejectedValue({
       code: 'OS-PLUG-LNOT-0005',
       message: 'Notifications are not enabled on this device.',
@@ -196,6 +216,7 @@ describe('Напоминания в системе: разрешение на у
     expect(reminderNotificationStatus()).toBe('denied')
     expect(listener).toHaveBeenCalled()
     unsubscribe()
+    warn.mockRestore()
   })
 
   it('сбой плагина не ломает приложение — статус и предупреждение в консоли', async () => {
@@ -204,6 +225,41 @@ describe('Напоминания в системе: разрешение на у
 
     expect(await sync([entry()])).toBe('failed')
     expect(warn).toHaveBeenCalled()
+    warn.mockRestore()
+  })
+})
+
+describe('Напоминания в системе: молчание системы', () => {
+  it('список запланированного не пришёл — расписание всё равно ставится', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    plugin.getPending.mockRejectedValue(new Error('плагин упал'))
+
+    // Снятие прежнего расписания — удобство, а не условие работы. Раньше сбой на этом шаге
+    // останавливал синхронизацию целиком: расписание не вставало, и на экране не было ни
+    // слова о причине — «напоминания молча не приходят».
+    expect(await sync([entry()])).toBe('scheduled')
+    expect(plugin.cancel).not.toHaveBeenCalled()
+    expect(scheduled()).toHaveLength(1)
+    expect(warn).toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
+  it('система промолчала на постановке — экран узнаёт причину, а не ждёт вечно', async () => {
+    vi.useFakeTimers()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    plugin.schedule.mockImplementation(
+      () => new Promise<{ notifications: { id: number }[] }>(() => undefined),
+    )
+    const { reminderNotificationProblem } = await import('./reminders')
+
+    const status = sync([entry()])
+    // Подгрузка плагина и обращения к системе — это отдельные задачи: двигаем время, пока итог
+    // не будет готов, и только потом проверяем причину.
+    await waitForTimers(status)
+
+    expect(await status).toBe('failed')
+    expect(reminderNotificationProblem()).toContain('не ответила за 60 с')
+    vi.useRealTimers()
     warn.mockRestore()
   })
 })

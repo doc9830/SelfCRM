@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { Button, Card, Field, Input, IntegerInput, PhoneInput, cx } from '../components/ui'
 import { Icon } from '../components/Icons'
 import { downloadBackup, downloadJson, readBackupFile } from '../db/backup'
@@ -14,7 +14,10 @@ import {
   allowExactReminderAlarms,
   allowReminderNotifications,
   readReminderSystemReport,
+  reminderNotificationProblem,
   sendTestReminderNotification,
+  subscribeReminderNotificationStatus,
+  type ReminderProblem,
   type ReminderSystemReport,
   type ReminderTestStatus,
 } from '../notifications/reminders'
@@ -70,6 +73,14 @@ export function Settings() {
   const isNative = Capacitor.isNativePlatform()
   const [reminders, setReminders] = useState<ReminderSystemReport | null>(null)
   const [reminderTest, setReminderTest] = useState<'idle' | 'sending' | ReminderTestStatus>('idle')
+
+  // Причина последнего сбоя пересборки расписания: расписание пересобирает фоновая
+  // синхронизация (components/ReminderNotifications.tsx), поэтому подписка, а не чтение
+  // при открытии экрана — иначе о сбое, случившемся после открытия, экран не сказал бы.
+  const syncProblem = useSyncExternalStore(
+    subscribeReminderNotificationStatus,
+    reminderNotificationProblem,
+  )
 
   // Состояние напоминаний читается при открытии экрана: системные разрешения нельзя спросить
   // синхронно, а показать их нужно сразу — иначе непонятно, дойдут ли напоминания.
@@ -241,22 +252,35 @@ export function Settings() {
   }
 
   // Подписи состояния: система отвечает про разрешения словами 'granted' / 'denied' / 'unknown',
-  // а пользователю нужно объяснение — что это значит для напоминаний.
+  // а пользователю нужно объяснение — что это значит для напоминаний. Если состояние прочитать
+  // не удалось (система ответила ошибкой или промолчала), строка говорит об этом прямо: причина
+  // важнее общего текста, иначе непонятно, что делать.
+  const problemOf = (what: ReminderProblem['what']): string | undefined =>
+    reminders?.problems.find((item) => item.what === what)?.text
+
+  const notificationsProblem = problemOf('notifications')
+  const exactProblem = problemOf('exact')
+  const pendingProblem = problemOf('pending')
+
   const notificationsDesc = !reminders
     ? 'Проверяем состояние…'
-    : reminders.notifications === 'granted'
-      ? 'Разрешены: напоминание приходит всплывающей плашкой, даже когда SelfCRM закрыта'
-      : reminders.notifications === 'denied'
-        ? 'Не разрешены: напоминания видны только в приложении. Разрешение выдаётся в системных настройках'
-        : 'Система ещё не спрашивала: диалог появится при первом напоминании с будущим сроком'
+    : notificationsProblem
+      ? `Не удалось прочитать состояние — ${notificationsProblem}`
+      : reminders.notifications === 'granted'
+        ? 'Разрешены: напоминание приходит всплывающей плашкой, даже когда SelfCRM закрыта'
+        : reminders.notifications === 'denied'
+          ? 'Не разрешены: напоминания видны только в приложении. Разрешение выдаётся в системных настройках'
+          : 'Система ещё не спрашивала: диалог появится при первом напоминании с будущим сроком'
 
   const exactAlarmsDesc = !reminders
     ? 'Проверяем состояние…'
-    : reminders.exact === 'granted'
-      ? 'Разрешены: напоминание приходит в назначенную минуту'
-      : reminders.exact === 'denied'
-        ? 'Не разрешены: система может отложить напоминание на неопределённый срок'
-        : 'Система не сообщила состояние — на этой версии Android такое разрешение не нужно'
+    : exactProblem
+      ? `Не удалось прочитать состояние — ${exactProblem}`
+      : reminders.exact === 'granted'
+        ? 'Разрешены: напоминание приходит в назначенную минуту'
+        : reminders.exact === 'denied'
+          ? 'Не разрешены: система может отложить напоминание на неопределённый срок'
+          : 'Система не сообщила состояние — на этой версии Android такое разрешение не нужно'
 
   const pendingDesc =
     reminders && reminders.pending.length > 0
@@ -268,7 +292,9 @@ export function Settings() {
         )}: ${reminders.pending
           .map((item) => reminderWhenLabel(item.at.toISOString()))
           .join(', ')}`
-      : 'Нет: будущие напоминания встают в систему при первом напоминании и после каждого изменения данных'
+      : pendingProblem
+        ? `Не удалось прочитать список — ${pendingProblem}`
+        : 'Нет: будущие напоминания встают в систему при первом напоминании и после каждого изменения данных'
 
   return (
     <div>
@@ -405,6 +431,18 @@ export function Settings() {
           {reminderTest !== 'idle' && reminderTest !== 'sending' && (
             <div className="field-hint" style={{ marginTop: 8 }}>
               {REMINDER_TEST_MESSAGE[reminderTest]}
+            </div>
+          )}
+          {reminders && reminders.problems.length > 0 && (
+            <div className="field-hint reminder-notice" style={{ marginTop: 8 }}>
+              Система напоминаний ответила не полностью — нажмите «Обновить» ниже, чтобы прочитать
+              состояние ещё раз. Это сбой системы телефона, а не данных: клиенты и заказы на месте.
+            </div>
+          )}
+          {syncProblem && (
+            <div className="field-hint reminder-notice" style={{ marginTop: 8 }}>
+              Расписание не удалось поставить — {syncProblem}. Пока причина не уйдёт, напоминания
+              видны только на экране приложения.
             </div>
           )}
           <div className="field-hint" style={{ marginTop: 8 }}>

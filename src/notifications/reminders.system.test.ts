@@ -64,6 +64,25 @@ function scheduled(): ScheduledNotification[] {
   return calls.length ? calls[calls.length - 1][0].notifications : []
 }
 
+/**
+ * Двигает время, пока обещание не выполнится: подгрузка плагина и каждое обращение к системе —
+ * это отдельные задачи, поэтому одного сдвига времени мало. Реальные секунды предела ожидания
+ * в тестах не выжидаем.
+ */
+async function waitForTimers<T>(work: Promise<T>): Promise<T> {
+  let settled = false
+  void work.then(
+    () => {
+      settled = true
+    },
+    () => {
+      settled = true
+    },
+  )
+  while (!settled) await vi.advanceTimersByTimeAsync(5_000)
+  return work
+}
+
 beforeEach(() => {
   vi.resetModules()
   vi.clearAllMocks()
@@ -163,13 +182,73 @@ describe('Напоминания в системе: состояние для э
     warn.mockRestore()
   })
 
-  it('сбой чтения не ломает экран — предупреждение в консоли вместо отчёта', async () => {
+  it('сбой чтения одного пункта не прячет остальные', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     const { readReminderSystemReport } = await import('./reminders')
     plugin.getPending.mockRejectedValue(new Error('плагин упал'))
 
-    expect(await readReminderSystemReport()).toBeNull()
+    const report = await readReminderSystemReport()
+
+    // Разрешения прочитаны, а про список честно сказано, что прочитать его не удалось:
+    // раньше общий отказ превращал весь отчёт в null, и экран навсегда замирал на
+    // «Проверяем состояние…».
+    expect(report).toMatchObject({
+      notifications: 'granted',
+      exact: 'granted',
+      pending: [],
+      problems: [{ what: 'pending', text: 'система ответила ошибкой: плагин упал' }],
+    })
     expect(warn).toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
+  it('молчание системы не оставляет строки на «Проверяем состояние…»', async () => {
+    vi.useFakeTimers()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const { readReminderSystemReport } = await import('./reminders')
+    // Система не отвечает вовсе: Capacitor оставляет такой вызов без ответа, и без предела
+    // ожидания обещание повисло бы навсегда.
+    plugin.checkPermissions.mockImplementation(() => new Promise<{ display: string }>(() => undefined))
+
+    const report = readReminderSystemReport()
+    // Подгрузка плагина и обращения к системе — это отдельные задачи: двигаем время, пока отчёт
+    // не будет готов, и только потом проверяем причину.
+    await waitForTimers(report)
+
+    expect(await report).toMatchObject({
+      notifications: 'unknown',
+      exact: 'granted',
+      pending: [],
+      problems: [{ what: 'notifications', text: expect.stringContaining('не ответила за 5 с') }],
+    })
+    vi.useRealTimers()
+    warn.mockRestore()
+  })
+
+  it('сбой одного состояния не мешает прочитать другое', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const { readReminderSystemReport } = await import('./reminders')
+    plugin.checkExactNotificationSetting.mockRejectedValue(new Error('нет метода'))
+    plugin.getPending.mockResolvedValue({
+      notifications: [
+        {
+          id: 7,
+          title: 'Заказ №42 от 18.09.2026',
+          body: 'Позвонить клиенту',
+          extra: { source: 'selfcrm-reminder', reminderId: 'r1' },
+          schedule: { at: '2026-09-19T18:00:00.000Z' },
+        },
+      ],
+    })
+
+    const report = await readReminderSystemReport()
+
+    expect(report?.notifications).toBe('granted')
+    expect(report?.exact).toBe('unknown')
+    expect(report?.pending.map((item) => item.reminderId)).toEqual(['r1'])
+    expect(report?.problems).toEqual([
+      { what: 'exact', text: 'система ответила ошибкой: нет метода' },
+    ])
     warn.mockRestore()
   })
 })
