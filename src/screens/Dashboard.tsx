@@ -1,3 +1,4 @@
+import { useSyncExternalStore } from 'react'
 import { useRoute } from '../router'
 import { useData } from '../state/DataContext'
 import { isActiveStatus, isService, type Order } from '../types'
@@ -6,6 +7,10 @@ import { money, plural } from '../utils/format'
 import { ACTIVE_ORDERS_LINK, DEBT_LINK, statisticsLink } from '../utils/links'
 import { orderTitle } from '../utils/orders'
 import { dueSummary } from '../utils/payments'
+import {
+  reminderNotificationStatus,
+  subscribeReminderNotificationStatus,
+} from '../notifications/reminders'
 import {
   REMINDER_KIND_ICON,
   groupReminders,
@@ -40,6 +45,14 @@ export function Dashboard() {
   // Ближайшие напоминания из всех заказов: на главной это компактный обзор, сами
   // напоминания живут в карточках заказов — отдельного планировщика нет.
   const reminders = limitReminderGroups(groupReminders(db.getReminders()))
+
+  // Придут ли напоминания уведомлениями Android. Система спрашивает разрешение сама, и если
+  // пользователь отказал (или выключил уведомления приложения в системе), телефон молчит —
+  // об этом и говорит подпись под списком: иначе напоминания просто «не работают».
+  const notifications = useSyncExternalStore(
+    subscribeReminderNotificationStatus,
+    reminderNotificationStatus,
+  )
 
   // Подпись строки: по какому заказу и кому напомнить.
   const reminderMeta = (order: Order): string => {
@@ -150,6 +163,12 @@ export function Dashboard() {
               Ещё {reminders.hidden}{' '}
               {plural(reminders.hidden, 'напоминание', 'напоминания', 'напоминаний')} — в карточках
               заказов
+            </div>
+          )}
+          {notifications === 'denied' && (
+            <div className="field-hint reminder-notice">
+              Уведомления для SelfCRM не разрешены — напоминания приходят только на этот экран.
+              Разрешить их можно в системных настройках приложения.
             </div>
           )}
         </div>
