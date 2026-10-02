@@ -3,15 +3,20 @@
 // которые создал пользователь (`db.getReminders()`): своих уведомлений приложение
 // не придумывает.
 //
-// Разрешение система спрашивает сама: отдельного пункта в настройках нет. Диалог показывается
-// один раз — когда есть напоминание с будущим сроком; стоит пользователю отказать, уведомлений
-// не будет, и приложение говорит об этом подписью на главном экране (`reminderNotificationStatus`),
-// а менять разрешение пользователь идёт в системные настройки.
+// Разрешение на уведомления система спрашивает сама — когда есть напоминание с будущим сроком;
+// стоит пользователю отказать, уведомлений не будет, и приложение говорит об этом подписью на
+// главном экране (`reminderNotificationStatus`). Точные будильники (Android 12+) у приложения
+// есть изначально (`USE_EXACT_ALARM` в манифесте: система выдаёт его при установке), поэтому
+// напоминание приходит в назначенную минуту, а не «когда-нибудь»: неточный будильник система
+// сдвигает на неопределённый срок. Состояние разрешений, список запланированного и проверочное
+// уведомление показывает «Настройки → Напоминания» (`readReminderSystemReport`,
+// `sendTestReminderNotification`) — без них «напоминания не пришли» остаётся загадкой.
 //
 // В браузере и в мини-приложении Telegram системных уведомлений нет: там функции ниже
-// возвращают 'unsupported', а сроки видны блоком «Напоминания» на главном экране
-// (utils/reminders.ts). Плагин подгружается по требованию, поэтому в веб-версии его код
+// возвращают 'unsupported' (а проверка — null), сроки видны блоком «Напоминания» на главном
+// экране (utils/reminders.ts). Плагин подгружается по требованию, поэтому в веб-версии его код
 // в бандл не попадает.
+
 import { Capacitor } from '@capacitor/core'
 import { orderHeading } from '../utils/orders'
 import { REMINDER_KIND_LABEL, type ReminderEntry } from '../utils/reminders'
@@ -30,20 +35,56 @@ export const REMINDER_CHANNEL_NAME = 'Напоминания по заказам
 // уведомлений для приложения выключен пользователем — тогда расписание не встаёт.
 const NOTIFICATIONS_DISABLED_CODE = 'OS-PLUG-LNOT-0005'
 
+// Предупреждение плагина «точный будильник не встал, поставили неточный»: разрешения на точные
+// будильники нет, поэтому система вольна сдвинуть напоминание. О таком итоге экран говорит
+// подписью, иначе задержка выглядит как «напоминание не пришло».
+const SCHEDULED_INEXACT_CODE = 'OS-PLUG-LNOT-0017'
+
 // Метка «своих» уведомлений в системе: при синхронизации снимаются только они,
 // чужие записи приложения (если появятся) остаются на месте.
 export const REMINDER_NOTIFICATION_SOURCE = 'selfcrm-reminder'
+
+// Проверочное уведомление из настроек: своя метка, чтобы синхронизация расписания его не сняла,
+// и свой фиксированный id, чтобы повторная проверка заменяла прежнюю, а не копила уведомления.
+export const REMINDER_TEST_SOURCE = 'selfcrm-reminder-test'
+export const REMINDER_TEST_DELAY_SECONDS = 15
 
 // Состояние разрешения в системе — так же, как его отдаёт плагин: 'prompt' значит «система
 // ещё не спрашивала».
 type ReminderPermission = 'prompt' | 'prompt-with-rationale' | 'granted' | 'denied'
 
+// Состояние разрешения для экрана настроек: 'unknown' — система не ответила (старые версии
+// Android, где таких разрешений нет вовсе).
+export type ReminderPermissionState = 'granted' | 'denied' | 'unknown'
+
 /**
  * Чем закончилась последняя синхронизация расписания: по статусу видно, придут ли напоминания
  * уведомлениями. 'denied' — разрешение не выдано (или уведомления выключены для приложения):
- * о таком состоянии приложение говорит пользователю подписью на главном экране.
+ * о таком состоянии приложение говорит пользователю подписью на главном экране. 'inexact' —
+ * напоминание поставлено неточным будильником: система может задержать его на неопределённый
+ * срок, поэтому экран предупреждает об этом и предлагает включить точные будильники.
  */
-export type ReminderSyncStatus = 'unsupported' | 'nothing' | 'scheduled' | 'denied' | 'failed'
+export type ReminderSyncStatus =
+  | 'unsupported'
+  | 'nothing'
+  | 'scheduled'
+  | 'inexact'
+  | 'denied'
+  | 'failed'
+
+/**
+ * Что видно про напоминания в системе — для «Настройки → Напоминания»: разрешения и список
+ * запланированного. Состояния читаются у системы, а не угадываются, поэтому экран говорит о
+ * том, что есть на самом деле (в браузере и Telegram отчёта нет — null).
+ */
+export interface ReminderSystemReport {
+  notifications: ReminderPermissionState
+  exact: ReminderPermissionState
+  pending: ReminderNotification[]
+}
+
+/** Итог проверочного уведомления: 'sent' — поставлено, 'denied' — система не разрешает показ. */
+export type ReminderTestStatus = 'sent' | 'denied' | 'unsupported' | 'failed'
 
 // Имя клиента по идентификатору — для подписи уведомления.
 export type ClientNameLookup = (clientId: string | null) => string | undefined
@@ -138,7 +179,8 @@ function setStatus(status: ReminderSyncStatus): ReminderSyncStatus {
 }
 
 // Разрешение просим один раз за запуск приложения: синхронизация идёт после каждого изменения
-// данных, и без этой защёлки диалог всплывал бы снова и снова после отказа.
+// данных, и без этой защёлки диалог всплывал бы снова и снова после отказа. Кнопка «Разрешить»
+// в настройках просит явно (`force`) — там пользователь сам решил показать диалог.
 let permissionAsked = false
 
 /**
@@ -146,10 +188,13 @@ let permissionAsked = false
  * пользователя, на старых версиях разрешение выдано заранее, поэтому повторный вызов просто
  * вернёт «granted».
  */
-async function askNotificationPermission(plugin: LocalNotificationsPlugin): Promise<boolean> {
+async function askNotificationPermission(
+  plugin: LocalNotificationsPlugin,
+  force = false,
+): Promise<boolean> {
   const current = await plugin.checkPermissions()
   if (current.display === 'granted') return true
-  if (permissionAsked) return false
+  if (permissionAsked && !force) return false
   permissionAsked = true
   const asked = await plugin.requestPermissions()
   return asked.display === 'granted'
@@ -157,13 +202,197 @@ async function askNotificationPermission(plugin: LocalNotificationsPlugin): Prom
 
 /**
  * Разрешены ли точные будильники (Android 12+): от этого зависит, сработает напоминание
- * в назначенную минуту или с задержкой.
+ * в назначенную минуту или с задержкой. На Android 13+ разрешение (`USE_EXACT_ALARM`) выдано
+ * приложению при установке, поэтому система отвечает «granted» без действий пользователя.
  */
 async function reminderExactAlarmPermission(
   plugin: LocalNotificationsPlugin,
 ): Promise<ReminderPermission> {
   const status = await plugin.checkExactNotificationSetting()
   return status.exact_alarm
+}
+
+/** Канал уведомлений создаётся перед постановкой: без него на Android 8+ уведомление не видно. */
+async function createReminderChannel(plugin: LocalNotificationsPlugin): Promise<void> {
+  await plugin.createChannel({
+    id: REMINDER_CHANNEL_ID,
+    name: REMINDER_CHANNEL_NAME,
+    description: 'Напоминания по заказам SelfCRM',
+    importance: 4,
+    // Текст виден на экране блокировки, но система скрывает его, если устройство
+    // защищено паролем: в уведомлении бывают имя клиента и номер заказа.
+    visibility: 0,
+    vibration: true,
+  })
+}
+
+/** Метка уведомления в системе: по ней отличимы «свои» записи приложения от чужих. */
+function notificationSource(item: { extra?: unknown }): string | undefined {
+  return (item.extra as { source?: string } | null | undefined)?.source
+}
+
+/** Что из поставленного принадлежит приложению: напоминания или проверка. */
+function ourNotifications<T extends { extra?: unknown }>(
+  items: T[],
+  source: string = REMINDER_NOTIFICATION_SOURCE,
+): T[] {
+  return items.filter((item) => notificationSource(item) === source)
+}
+
+/**
+ * Дата из записи системы. Плагин хранит уведомление тем видом, в каком его получил, поэтому
+ * срок приходит то датой, то строкой — приводим к дате здесь, а не в месте показа.
+ */
+function notificationDate(value: unknown): Date | null {
+  const date = value instanceof Date ? value : typeof value === 'string' ? new Date(value) : null
+  return date && !Number.isNaN(date.getTime()) ? date : null
+}
+
+/** Поставленные приложением напоминания — по сроку, как их показывает система. */
+function pendingReminders(pending: {
+  notifications: {
+    id: number
+    title: string
+    body: string
+    extra?: unknown
+    schedule?: { at?: unknown }
+  }[]
+}): ReminderNotification[] {
+  return ourNotifications(pending.notifications)
+    .map((item) => ({
+      reminderId: (item.extra as { reminderId?: string } | null | undefined)?.reminderId ?? '',
+      id: item.id,
+      title: item.title,
+      body: item.body,
+      at: notificationDate(item.schedule?.at),
+    }))
+    .filter((item): item is ReminderNotification => item.at !== null)
+    .sort((a, b) => a.at.getTime() - b.at.getTime())
+}
+
+function permissionState(display: string): ReminderPermissionState {
+  if (display === 'granted') return 'granted'
+  if (display === 'denied') return 'denied'
+  return 'unknown'
+}
+
+async function exactAlarmState(plugin: LocalNotificationsPlugin): Promise<ReminderPermissionState> {
+  try {
+    return (await reminderExactAlarmPermission(plugin)) === 'granted' ? 'granted' : 'denied'
+  } catch (error) {
+    console.warn('SelfCRM: система не сообщила состояние точных будильников', error)
+    return 'unknown'
+  }
+}
+
+/**
+ * Состояние напоминаний в системе для «Настройки → Напоминания»: разрешения и список
+ * запланированного. Разрешения читаются у системы, а не угадываются по итогу синхронизации,
+ * поэтому экран говорит то, что есть на самом деле. В браузере и Telegram системных
+ * уведомлений нет — отчёта тоже (null).
+ */
+export async function readReminderSystemReport(): Promise<ReminderSystemReport | null> {
+  if (!reminderNotificationsSupported()) return null
+  try {
+    const plugin = await loadLocalNotifications()
+    return {
+      notifications: permissionState((await plugin.checkPermissions()).display),
+      exact: await exactAlarmState(plugin),
+      pending: pendingReminders(await plugin.getPending()),
+    }
+  } catch (error) {
+    // Сбой чтения не ломает приложение: состояние — подсказка, а не данные.
+    console.warn('SelfCRM: не удалось прочитать состояние напоминаний', error)
+    return null
+  }
+}
+
+/**
+ * Кнопка «Разрешить» для уведомлений: показывает системный диалог явно, даже если приложение
+ * уже спрашивало и получило отказ (пользователь мог передумать).
+ */
+export async function allowReminderNotifications(): Promise<boolean> {
+  if (!reminderNotificationsSupported()) return false
+  try {
+    const plugin = await loadLocalNotifications()
+    return await askNotificationPermission(plugin, true)
+  } catch (error) {
+    console.warn('SelfCRM: не удалось запросить разрешение на уведомления', error)
+    return false
+  }
+}
+
+/**
+ * Кнопка «Разрешить» для точных будильников. У приложения они есть сразу (`USE_EXACT_ALARM`),
+ * но если система их не выдала, плагин открывает системный экран «Будильники и напоминания»:
+ * разрешение выдаёт пользователь, а вернувшись в приложение он увидит новый итог — расписание
+ * пересобирается при возвращении в приложение.
+ */
+export async function allowExactReminderAlarms(): Promise<boolean> {
+  if (!reminderNotificationsSupported()) return false
+  try {
+    const plugin = await loadLocalNotifications()
+    const status = await plugin.changeExactNotificationSetting()
+    return status.exact_alarm === 'granted'
+  } catch (error) {
+    console.warn('SelfCRM: не удалось запросить разрешение на точные будильники', error)
+    return false
+  }
+}
+
+/**
+ * Проверка из настроек: ставит проверочное уведомление через `REMINDER_TEST_DELAY_SECONDS`
+ * секунд — по нему видно, доходит ли уведомление, когда приложение свёрнуто. Срок считается от
+ * `now`, поэтому тесты не зависят от реального времени.
+ */
+export async function sendTestReminderNotification(
+  now: Date = new Date(),
+): Promise<ReminderTestStatus> {
+  if (!reminderNotificationsSupported()) return 'unsupported'
+  try {
+    const plugin = await loadLocalNotifications()
+
+    // Прежняя проверка могла не сработать (уведомления не были разрешены): снимаем её,
+    // чтобы новая не ждала в очереди за старой.
+    const stale = ourNotifications((await plugin.getPending()).notifications, REMINDER_TEST_SOURCE)
+    if (stale.length) {
+      await plugin.cancel({ notifications: stale.map((item) => ({ id: item.id })) })
+    }
+
+    if (!(await askNotificationPermission(plugin, true))) return 'denied'
+    await createReminderChannel(plugin)
+
+    const at = new Date(now.getTime() + REMINDER_TEST_DELAY_SECONDS * 1000)
+    const exact = (await reminderExactAlarmPermission(plugin)) === 'granted'
+    await plugin.schedule({
+      notifications: [
+        {
+          id: reminderNotificationId(REMINDER_TEST_SOURCE),
+          title: 'Проверка напоминаний',
+          body: 'Уведомления SelfCRM приходят. Проверка из настроек приложения.',
+          channelId: REMINDER_CHANNEL_ID,
+          schedule: { at, allowWhileIdle: true },
+          isExactNotification: exact,
+          extra: { source: REMINDER_TEST_SOURCE },
+        },
+      ],
+    })
+    return 'sent'
+  } catch (error) {
+    if (notificationsDisabled(error)) return 'denied'
+    console.warn('SelfCRM: не удалось поставить проверочное уведомление', error)
+    return 'failed'
+  }
+}
+
+/**
+ * Плагин предупреждает (`OS-PLUG-LNOT-0017`), что точный будильник не встал и расписание стало
+ * неточным: проверяем и код, и текст — код числовой и может смениться при обновлении плагина.
+ */
+function scheduledInexact(result: unknown): boolean {
+  const warning = (result as { warning?: { code?: string; message?: string } } | null | undefined)
+    ?.warning
+  return warning?.code === SCHEDULED_INEXACT_CODE || /inexact/i.test(warning?.message ?? '')
 }
 
 /**
@@ -206,11 +435,7 @@ export async function syncReminderNotifications(
     )
 
     const pending = await plugin.getPending()
-    const ours = pending.notifications.filter(
-      (item) =>
-        (item.extra as { source?: string } | null | undefined)?.source ===
-        REMINDER_NOTIFICATION_SOURCE,
-    )
+    const ours = ourNotifications(pending.notifications)
     if (ours.length) {
       await plugin.cancel({ notifications: ours.map((item) => ({ id: item.id })) })
     }
@@ -218,26 +443,19 @@ export async function syncReminderNotifications(
     if (!planned.length) return setStatus('nothing')
     if (!(await askNotificationPermission(plugin))) return setStatus('denied')
 
-    await plugin.createChannel({
-      id: REMINDER_CHANNEL_ID,
-      name: REMINDER_CHANNEL_NAME,
-      description: 'Напоминания по заказам SelfCRM',
-      importance: 4,
-      // Текст виден на экране блокировки, но система скрывает его, если устройство
-      // защищено паролем: в уведомлении бывают имя клиента и номер заказа.
-      visibility: 0,
-      vibration: true,
-    })
+    await createReminderChannel(plugin)
 
-    // Точные будильники (Android 12+) — отдельное разрешение системы. Приложение его
-    // не просит: не выдав разрешение, плагин сначала открывает системный экран
-    // «Будильники и напоминания» и ставит расписание только после ответа — из-за этого
-    // напоминания не встают вовсе. Поэтому точное время просим только когда оно уже
-    // разрешено, иначе сразу ставим неточный будильник: он разбудит систему и в
-    // энергосбережении (`allowWhileIdle`), но сработает с задержкой в несколько минут.
+    // Точные будильники (Android 12+). Разрешение есть у приложения изначально: на Android 13+
+    // система выдаёт `USE_EXACT_ALARM` при установке, на Android 12 `SCHEDULE_EXACT_ALARM`
+    // выдано по умолчанию, — поэтому напоминание приходит в назначенную минуту. Точное время
+    // просим только когда разрешение выдано: иначе плагин сначала открыл бы системный экран
+    // «Будильники и напоминания» и поставил расписание лишь после ответа — а неточный будильник
+    // система сдвигает на неопределённый срок (в спящем телефоне — на часы), и напоминание
+    // молча не приходит. Если точного разрешения всё-таки нет, ставим неточный будильник и
+    // говорим об этом экрану ('inexact').
     const exact = (await reminderExactAlarmPermission(plugin)) === 'granted'
 
-    await plugin.schedule({
+    const result = await plugin.schedule({
       notifications: planned.map((item) => ({
         id: item.id,
         title: item.title,
@@ -248,7 +466,9 @@ export async function syncReminderNotifications(
         extra: { source: REMINDER_NOTIFICATION_SOURCE, reminderId: item.reminderId },
       })),
     })
-    return setStatus('scheduled')
+    // Плагин предупреждает, если точный будильник не встал: система вольна сдвинуть такое
+    // напоминание, поэтому итог — 'inexact', а не 'scheduled'.
+    return setStatus(exact && !scheduledInexact(result) ? 'scheduled' : 'inexact')
   } catch (error) {
     // Уведомления могут быть выключены для приложения в системе (разрешение при этом выдано):
     // плагин отказывает кодом `OS-PLUG-LNOT-0005`. Это не сбой, а состояние, о котором нужно

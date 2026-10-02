@@ -10,12 +10,31 @@ import { emptyContractor, type Contractor } from '../types'
 import { INN_LENGTHS, KPP_LENGTHS, OGRN_LENGTHS, hasValidDigitLength, isPhoneValid } from '../utils/input'
 import { Capacitor } from '@capacitor/core'
 import { downloadUpdate, fetchLatestRelease, installUpdate, isNewerVersion, openExternal, type ReleaseInfo } from '../updates'
+import {
+  allowExactReminderAlarms,
+  allowReminderNotifications,
+  readReminderSystemReport,
+  sendTestReminderNotification,
+  type ReminderSystemReport,
+  type ReminderTestStatus,
+} from '../notifications/reminders'
+import { reminderWhenLabel } from '../utils/reminders'
 import { useRoute } from '../router'
 import { APP_VERSION } from '../version'
 import { FEEDBACK_EMAIL } from '../utils/feedback'
+import { plural } from '../utils/format'
 import { feedbackLink } from '../utils/links'
 
 const isDev = import.meta.env.DEV
+
+// Что показать после проверочного уведомления: 'sent' — оно поставлено, остальное — почему нет.
+const REMINDER_TEST_MESSAGE: Record<ReminderTestStatus, string> = {
+  sent: 'Проверка поставлена: сверните SelfCRM и подождите 15 секунд. Пришло уведомление — напоминания работают.',
+  denied:
+    'Уведомления не разрешены — телефон их не покажет. Разрешение выдаётся в системных настройках приложения.',
+  unsupported: 'Проверка доступна только в приложении на телефоне.',
+  failed: 'Не удалось поставить проверочное уведомление. Попробуйте ещё раз.',
+}
 
 // Метка времени для имён скачиваемых файлов (как в src/db/backup.ts).
 function fileStamp(): string {
@@ -45,6 +64,55 @@ export function Settings() {
   const updatesRef = useRef<HTMLDivElement>(null)
   const autoCheckedRef = useRef(false)
   const [update, setUpdate] = useState<UpdateState>({ status: 'idle' })
+
+  // Напоминания в системе: разрешения и список запланированного. Экран есть только в сборке
+  // приложения — в браузере и Telegram системных уведомлений нет, поэтому и карточки нет.
+  const isNative = Capacitor.isNativePlatform()
+  const [reminders, setReminders] = useState<ReminderSystemReport | null>(null)
+  const [reminderTest, setReminderTest] = useState<'idle' | 'sending' | ReminderTestStatus>('idle')
+
+  // Состояние напоминаний читается при открытии экрана: системные разрешения нельзя спросить
+  // синхронно, а показать их нужно сразу — иначе непонятно, дойдут ли напоминания.
+  useEffect(() => {
+    if (!isNative) return
+    let alive = true
+    void readReminderSystemReport().then((report) => {
+      if (alive) setReminders(report)
+    })
+    return () => {
+      alive = false
+    }
+  }, [isNative])
+
+  const refreshReminders = async () => {
+    setReminders(await readReminderSystemReport())
+  }
+
+  // «Разрешить»: система показывает свой диалог, после ответа состояние перечитывается.
+  // Разрешение могло только что появиться, поэтому расписание пересобирается сразу: за него
+  // отвечает `components/ReminderNotifications.tsx`, а признак для пересборки — версия данных.
+  const allowReminders = async () => {
+    await allowReminderNotifications()
+    refresh()
+    await refreshReminders()
+  }
+
+  // «Разрешить» для точных будильников: на Android 12+ плагин открывает системный экран
+  // «Будильники и напоминания», разрешение выдаёт пользователь.
+  const allowExactAlarms = async () => {
+    await allowExactReminderAlarms()
+    refresh()
+    await refreshReminders()
+  }
+
+  // «Проверить»: проверочное уведомление через 15 секунд — по нему видно, доходят ли уведомления,
+  // когда приложение свёрнуто (именно в этом случае «напоминания не приходят»).
+  const checkReminderSystem = async () => {
+    setReminderTest('sending')
+    const result = await sendTestReminderNotification()
+    setReminderTest(result)
+    await refreshReminders()
+  }
 
   // Переход из уведомления о новой версии: «/settings?section=updates».
   const highlightUpdates = route.query.get('section') === 'updates'
@@ -172,6 +240,36 @@ export function Settings() {
     await runExport(() => downloadJson(json, `selfcrm-before-import-${fileStamp()}.json`))
   }
 
+  // Подписи состояния: система отвечает про разрешения словами 'granted' / 'denied' / 'unknown',
+  // а пользователю нужно объяснение — что это значит для напоминаний.
+  const notificationsDesc = !reminders
+    ? 'Проверяем состояние…'
+    : reminders.notifications === 'granted'
+      ? 'Разрешены: напоминание приходит всплывающей плашкой, даже когда SelfCRM закрыта'
+      : reminders.notifications === 'denied'
+        ? 'Не разрешены: напоминания видны только в приложении. Разрешение выдаётся в системных настройках'
+        : 'Система ещё не спрашивала: диалог появится при первом напоминании с будущим сроком'
+
+  const exactAlarmsDesc = !reminders
+    ? 'Проверяем состояние…'
+    : reminders.exact === 'granted'
+      ? 'Разрешены: напоминание приходит в назначенную минуту'
+      : reminders.exact === 'denied'
+        ? 'Не разрешены: система может отложить напоминание на неопределённый срок'
+        : 'Система не сообщила состояние — на этой версии Android такое разрешение не нужно'
+
+  const pendingDesc =
+    reminders && reminders.pending.length > 0
+      ? `${reminders.pending.length} ${plural(
+          reminders.pending.length,
+          'напоминание',
+          'напоминания',
+          'напоминаний',
+        )}: ${reminders.pending
+          .map((item) => reminderWhenLabel(item.at.toISOString()))
+          .join(', ')}`
+      : 'Нет: будущие напоминания встают в систему при первом напоминании и после каждого изменения данных'
+
   return (
     <div>
       {loadWarning && (
@@ -236,6 +334,87 @@ export function Settings() {
           </label>
         </div>
       </Card>
+
+      {isNative && (
+        <Card className="settings-group">
+          <div className="section-title" style={{ marginBottom: 6 }}>
+            Напоминания
+          </div>
+          <div className="settings-row-desc" style={{ marginBottom: 4 }}>
+            Напоминания по заказам приходят уведомлением Android, даже когда SelfCRM закрыта.
+            Здесь видно, всё ли для этого готово на телефоне.
+          </div>
+          <div className="settings-row">
+            <div>
+              <div className="settings-row-title">Уведомления системы</div>
+              <div className="settings-row-desc">{notificationsDesc}</div>
+            </div>
+            {reminders?.notifications === 'denied' && (
+              <Button size="sm" variant="secondary" icon="bell" onClick={() => void allowReminders()}>
+                Разрешить
+              </Button>
+            )}
+          </div>
+          <div className="settings-row">
+            <div>
+              <div className="settings-row-title">Точные будильники</div>
+              <div className="settings-row-desc">{exactAlarmsDesc}</div>
+            </div>
+            {reminders?.exact === 'denied' && (
+              <Button
+                size="sm"
+                variant="secondary"
+                icon="alert"
+                onClick={() => void allowExactAlarms()}
+              >
+                Разрешить
+              </Button>
+            )}
+          </div>
+          <div className="settings-row">
+            <div>
+              <div className="settings-row-title">Запланировано в системе</div>
+              <div className="settings-row-desc">{pendingDesc}</div>
+            </div>
+            <Button
+              size="sm"
+              variant="secondary"
+              icon="refresh"
+              onClick={() => void refreshReminders()}
+            >
+              Обновить
+            </Button>
+          </div>
+          <div className="settings-row">
+            <div>
+              <div className="settings-row-title">Проверить уведомление</div>
+              <div className="settings-row-desc">
+                Через 15 секунд придёт проверочное уведомление — сверните SelfCRM и подождите
+              </div>
+            </div>
+            <Button
+              size="sm"
+              variant="primary"
+              icon="bell"
+              disabled={reminderTest === 'sending'}
+              onClick={() => void checkReminderSystem()}
+            >
+              {reminderTest === 'sending' ? 'Отправка…' : 'Проверить'}
+            </Button>
+          </div>
+          {reminderTest !== 'idle' && reminderTest !== 'sending' && (
+            <div className="field-hint" style={{ marginTop: 8 }}>
+              {REMINDER_TEST_MESSAGE[reminderTest]}
+            </div>
+          )}
+          <div className="field-hint" style={{ marginTop: 8 }}>
+            Напоминания приходят, даже когда SelfCRM закрыта. Если смахнуть приложение из списка
+            недавних задач, Android снимает запланированные напоминания — откройте SelfCRM, и они
+            встанут снова. Энергосбережение телефона тоже может отложить уведомление: в
+            настройках батареи разрешите SelfCRM работу в фоне.
+          </div>
+      </Card>
+      )}
 
       <Card className="settings-group">
         <div className="section-title" style={{ marginBottom: 6 }}>

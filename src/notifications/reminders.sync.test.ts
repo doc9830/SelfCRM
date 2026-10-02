@@ -1,9 +1,9 @@
 // Синхронизация расписания в системе: когда приложение спрашивает разрешение, с каким
 // будильником ставит напоминание и какой итог видит экран. Плагин и платформа подменяются:
 // настоящие уведомления в тестах поставить нечем, а проверить нужно именно решения приложения —
-// из-за них напоминания не приходили: разрешение не спрашивалось, а постановка зависела от
-// разрешения «точных будильников» (плагин сначала открывает системный экран и только после
-// ответа ставит расписание).
+// из-за них напоминания не приходили: постановка зависела от разрешения «точных будильников»
+// (неточный будильник система сдвигает на неопределённый срок), а сама необходимость этого
+// разрешения видна только в «Настройки → Напоминания».
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Order, Reminder } from '../types'
 import type { ReminderEntry } from '../utils/reminders'
@@ -28,9 +28,13 @@ const plugin = vi.hoisted(() => ({
   getPending: vi.fn(async () => ({ notifications: [] as { id: number; extra?: unknown }[] })),
   cancel: vi.fn(async (_options: { notifications: { id: number }[] }) => undefined),
   createChannel: vi.fn(async (_options: Record<string, unknown>) => undefined),
-  schedule: vi.fn(async (_options: { notifications: ScheduledNotification[] }) => ({
-    notifications: [] as { id: number }[],
-  })),
+  schedule: vi.fn(
+    async (_options: { notifications: ScheduledNotification[] }) =>
+      ({ notifications: [] as { id: number }[] }) as {
+        notifications: { id: number }[]
+        warning?: { code?: string; message?: string }
+      },
+  ),
 }))
 
 vi.mock('@capacitor/core', () => ({ Capacitor: { isNativePlatform: () => plugin.native } }))
@@ -85,7 +89,9 @@ beforeEach(() => {
   plugin.native = true
   plugin.checkPermissions.mockResolvedValue({ display: 'prompt' })
   plugin.requestPermissions.mockResolvedValue({ display: 'granted' })
-  plugin.checkExactNotificationSetting.mockResolvedValue({ exact_alarm: 'denied' })
+  // Точные будильники разрешены по умолчанию: на Android 13+ разрешение (`USE_EXACT_ALARM`)
+  // система выдаёт приложению при установке — напоминание приходит в назначенную минуту.
+  plugin.checkExactNotificationSetting.mockResolvedValue({ exact_alarm: 'granted' })
   plugin.getPending.mockResolvedValue({ notifications: [] })
   plugin.schedule.mockResolvedValue({ notifications: [] })
 })
@@ -106,7 +112,7 @@ describe('Напоминания в системе: где системных у
 })
 
 describe('Напоминания в системе: постановка уведомления', () => {
-  it('ставит напоминание в свой канал и не просит точный будильник без разрешения', async () => {
+  it('ставит напоминание в свой канал точным будильником', async () => {
     expect(await sync([entry()])).toBe('scheduled')
 
     const [notification] = scheduled()
@@ -116,18 +122,31 @@ describe('Напоминания в системе: постановка уве�
     expect(notification.channelId).toBe('selfcrm-reminders')
     expect(notification.schedule.at.toISOString()).toBe(at(19, 18))
     expect(notification.schedule.allowWhileIdle).toBe(true)
-    // Без разрешения «точных будильников» напоминание ставится неточным будильником: иначе
-    // плагин сначала открыл бы системный экран «Будильники и напоминания».
-    expect(notification.isExactNotification).toBe(false)
+    // Разрешение на точные будильники выдано системе при установке приложения — иначе система
+    // сдвинула бы неточный будильник на неопределённый срок, и напоминание молчало бы.
+    expect(notification.isExactNotification).toBe(true)
     expect(notification.extra).toEqual({ source: 'selfcrm-reminder', reminderId: 'r1' })
     expect(plugin.createChannel).toHaveBeenCalledTimes(1)
   })
 
-  it('просит точный будильник, когда разрешение выдано в системных настройках', async () => {
-    plugin.checkExactNotificationSetting.mockResolvedValue({ exact_alarm: 'granted' })
+  it('без разрешения на точные будильники ставит неточный и говорит об этом экрану', async () => {
+    plugin.checkExactNotificationSetting.mockResolvedValue({ exact_alarm: 'denied' })
 
-    expect(await sync([entry()])).toBe('scheduled')
-    expect(scheduled()[0].isExactNotification).toBe(true)
+    // Итог 'inexact', а не 'scheduled': система вольна сдвинуть такое напоминание, и подпись
+    // на главном экране говорит, что включить. Не поставить расписание вовсе — хуже.
+    expect(await sync([entry()])).toBe('inexact')
+    expect(scheduled()[0].isExactNotification).toBe(false)
+  })
+
+  it('предупреждение плагина о неточном будильнике тоже видно экрану', async () => {
+    // Разрешение выдано, но плагин предупредил, что точный будильник не встал: доверяем
+    // предупреждению — система сдвинет напоминание.
+    plugin.schedule.mockResolvedValue({
+      notifications: [],
+      warning: { code: 'OS-PLUG-LNOT-0017', message: 'Scheduled as an inexact alarm instead.' },
+    })
+
+    expect(await sync([entry()])).toBe('inexact')
   })
 
   it('снимает свои прежние уведомления и не трогает чужие', async () => {
